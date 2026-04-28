@@ -2,6 +2,7 @@ package database
 
 import "database/sql"
 
+// CreateUser inserts a new user into the users table.
 func CreateUser(db *sql.DB, email string, username string, password string) error {
 	query := "INSERT INTO users (email, username, password) VALUES (?, ?, ?)"
 

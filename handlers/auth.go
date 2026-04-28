@@ -9,6 +9,7 @@ import (
 	"github.com/mattn/go-sqlite3"
 )
 
+// RegisterHandler serves the registration form and creates new user accounts.
 func RegisterHandler(db *sql.DB) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -32,6 +33,7 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 
 			err := database.CreateUser(db, email, username, password)
 			if err != nil {
+				// Duplicate email or username values are reported by SQLite as constraint errors.
 				if isConstraintError(err) {
 					http.Error(w, "email or username is already taken", http.StatusConflict)
 					return
@@ -53,6 +55,7 @@ func isConstraintError(err error) bool {
 	return errors.As(err, &sqliteErr) && sqliteErr.Code == sqlite3.ErrConstraint
 }
 
+// LoginHandler serves the login form and checks submitted credentials.
 func LoginHandler(db *sql.DB) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -78,6 +81,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 				return
 			}
 
+			// Use one message for both cases so the response does not reveal which emails exist.
 			if user == nil || user.Password != password {
 				http.Error(w, "invalid email or password", http.StatusUnauthorized)
 				return

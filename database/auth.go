@@ -5,6 +5,7 @@ import (
 	"forum/models"
 )
 
+// GetUserByEmail returns the user with the given email, or nil when no user exists.
 func GetUserByEmail(db *sql.DB, email string) (*models.User, error) {
 
 	query := "SELECT id, email, username, password FROM users WHERE email = ?"
