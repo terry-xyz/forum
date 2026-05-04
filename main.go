@@ -14,8 +14,11 @@ func main() {
 		return
 	}
 
+	http.HandleFunc("/", handlers.HomeHandler(db))
 	http.HandleFunc("/register", handlers.RegisterHandler(db))
 	http.HandleFunc("/login", handlers.LoginHandler(db))
+	http.HandleFunc("/logout", handlers.LogoutHandler())
+	http.HandleFunc("/create-post", handlers.CreatePostHandler(db))
 
 	err = http.ListenAndServe(":8080", nil)
 	if err != nil {

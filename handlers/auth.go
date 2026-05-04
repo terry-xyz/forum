@@ -109,6 +109,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 	}
 }
 
+// LogoutHandler clears the session cookie and returns the user to the home page.
 func LogoutHandler() http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
