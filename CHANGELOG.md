@@ -5,36 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 1.1.1 (2026-04-28)
-
-### Documentation
-
-- add targeted code comments ([#15](https://platform.zone01.gr/git/dstaikos/forum/commit/8cc36efa954bab7ac3613f1de806d7d7dccc923b))
-
-## 1.1.0 (2026-04-28)
+## 0.1.0 (2026-05-04)
 
 ### Added
 
 - *(database)* add sqlite schema and user persistence ([#12](https://platform.zone01.gr/git/dstaikos/forum/commit/ab908c2a07eb1b7c561184a3619b59a5653614bf))
 - *(handlers)* add registration and login handlers ([#13](https://platform.zone01.gr/git/dstaikos/forum/commit/c76dbceb2cacb822e288d1d0878db9e582591366))
+- *(database)* add user lookup and post storage ([#19](https://platform.zone01.gr/git/dstaikos/forum/commit/c4f3290656a5f3bcfd7be6c3817cdb8ff259a95b))
+- *(handlers)* wire home and post flows ([#20](https://platform.zone01.gr/git/dstaikos/forum/commit/5a20c9f65b578652d69726b7b269f97a55808200))
+
+### Fixed
+
+- *(handlers)* return home handler HTTP errors ([#17](https://platform.zone01.gr/git/dstaikos/forum/commit/9aa8fead70f607bfdfb2c0d5a0e2c700a04f6d2d))
+- *(handlers/auth.go)* set session cookie attributes ([#18](https://platform.zone01.gr/git/dstaikos/forum/commit/b193bca8526ef49eac7a1e2d2c2d3decafab0f47))
 
 ### Documentation
 
 - *(forum-instructions)* replace specs with forum instructions ([#10](https://platform.zone01.gr/git/dstaikos/forum/commit/5fa442218311bec5899245315217332828641455))
+- *(CHANGELOG.md)* document forum implementation changes ([#14](https://platform.zone01.gr/git/dstaikos/forum/commit/82fa2f7ab51c7344dc97379dce00a0833b5a81f8))
+- add targeted code comments ([#15](https://platform.zone01.gr/git/dstaikos/forum/commit/8cc36efa954bab7ac3613f1de806d7d7dccc923b))
+- *(CHANGELOG.md)* document code comments ([#16](https://platform.zone01.gr/git/dstaikos/forum/commit/7686d3e918fd4d602500ce6730180265b3d8087c))
+- add notes ([#22](https://platform.zone01.gr/git/dstaikos/forum/commit/3ddfe7a0adacfd5076606c36b201fd5042ca598e))
 
 ### Other
 
-- *(.gitignore)* ignore local forum database ([#9](https://platform.zone01.gr/git/dstaikos/forum/commit/48fd75400df2036b282fcf6864cab03f0503a16a))
 - *(go.mod)* initialize Go module with sqlite driver ([#11](https://platform.zone01.gr/git/dstaikos/forum/commit/b5d09cc3ff90ecd09e09034bd003f5103109a609))
-
-## 1.0.0 (2026-04-23)
-
-### Documentation
-
-- team workflow ([#2](https://platform.zone01.gr/git/dstaikos/forum/commit/d6aea72e76a5901ad485f959f446b9f9dfed5c39))
-- *(specs)* add JTBD forum specifications ([#4](https://platform.zone01.gr/git/dstaikos/forum/commit/9533737b88873f7f64d27b14f1323863a71dc29d))
-
-### Other
-
-- First commit ([#1](https://platform.zone01.gr/git/dstaikos/forum/commit/0e3761cc54b5c0ca811cf66ea1148374567d6017))
-- create gitignore ([#3](https://platform.zone01.gr/git/dstaikos/forum/commit/cf082518de33d3c7088a56404752e73fee9b6b54))
