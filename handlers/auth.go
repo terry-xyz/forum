@@ -5,9 +5,13 @@ import (
 	"errors"
 	"forum/database"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/mattn/go-sqlite3"
 )
+
+const sessionCookieMaxAge = 60 * 60 * 24
 
 // RegisterHandler serves the registration form and creates new user accounts.
 func RegisterHandler(db *sql.DB) http.HandlerFunc {
@@ -87,8 +91,37 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 				return
 			}
 
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("login successful"))
+			// sessionID, err := helpers.GenerateSessionID()
+
+			http.SetCookie(w, &http.Cookie{
+				Name:     "session",
+				Value:    strconv.Itoa(user.ID),
+				Path:     "/",
+				MaxAge:   sessionCookieMaxAge,
+				HttpOnly: true,
+				SameSite: http.SameSiteLaxMode,
+			})
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+			return
 		}
+
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func LogoutHandler() http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		http.SetCookie(w, &http.Cookie{
+			Name:     "session",
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			Expires:  time.Unix(0, 0), // Some browsers are stricter, so we make it extra clear the cookie is expired.
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		})
+
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 	}
 }

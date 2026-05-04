@@ -89,6 +89,80 @@ func TestLoginHandlerRejectsWrongPassword(t *testing.T) {
 	}
 }
 
+func TestLoginHandlerSetsSessionCookie(t *testing.T) {
+	db := openTestDB(t)
+
+	if err := database.CreateUser(db, "user@example.com", "user", "password"); err != nil {
+		t.Fatal(err)
+	}
+
+	form := url.Values{
+		"email":    {"user@example.com"},
+		"password": {"password"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+
+	LoginHandler(db)(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusSeeOther)
+	}
+
+	cookies := w.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("cookies = %d, want 1", len(cookies))
+	}
+
+	cookie := cookies[0]
+	if cookie.Name != "session" {
+		t.Fatalf("cookie name = %q, want session", cookie.Name)
+	}
+	if cookie.Value == "" {
+		t.Fatal("cookie value is empty")
+	}
+	if !cookie.HttpOnly {
+		t.Fatal("session cookie should be HttpOnly")
+	}
+	if cookie.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("same site = %v, want %v", cookie.SameSite, http.SameSiteLaxMode)
+	}
+	if cookie.MaxAge <= 0 {
+		t.Fatalf("max age = %d, want positive value", cookie.MaxAge)
+	}
+}
+
+func TestLogoutHandlerExpiresSessionCookie(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/logout", nil)
+	w := httptest.NewRecorder()
+
+	LogoutHandler()(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusSeeOther)
+	}
+
+	cookies := w.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("cookies = %d, want 1", len(cookies))
+	}
+
+	cookie := cookies[0]
+	if cookie.Name != "session" {
+		t.Fatalf("cookie name = %q, want session", cookie.Name)
+	}
+	if cookie.MaxAge >= 0 {
+		t.Fatalf("max age = %d, want expired cookie", cookie.MaxAge)
+	}
+	if !cookie.HttpOnly {
+		t.Fatal("session cookie should be HttpOnly")
+	}
+	if cookie.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("same site = %v, want %v", cookie.SameSite, http.SameSiteLaxMode)
+	}
+}
+
 func openTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 
