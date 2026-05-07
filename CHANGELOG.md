@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0](https://platform.zone01.gr/git/ckotsalas/forum/compare/0.1.0...0.2.0) (2026-05-07)
+
+### Added
+
+- *(database)* add category comment and reaction persistence ([#25](https://platform.zone01.gr/git/ckotsalas/forum/commit/b2fce56646648160630d9f8810b43dae4c22ca11))
+- *(handlers)* add category comment and reaction flows ([#26](https://platform.zone01.gr/git/ckotsalas/forum/commit/fe318886667cab1c6c840807667491cd510e21e0))
+
+### Documentation
+
+- *(CHANGELOG.md)* update repository links ([#24](https://platform.zone01.gr/git/ckotsalas/forum/commit/ed3bf3fa10b3b9de4148e71bd83cb5c0f4576cd0))
+- *(database)* add explanatory code comments ([#28](https://platform.zone01.gr/git/ckotsalas/forum/commit/9bb24c24eccc4a2abb46899751b8cc12490574e1))
+
 ## 0.1.0 (2026-05-04)
 
 ### Added
