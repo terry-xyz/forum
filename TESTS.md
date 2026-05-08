@@ -1,3 +1,6 @@
+0. **log errors**
+   for example with each "http.Error(...)" we should also send a "fmt.Println("...", err)" to help ourselfs as developers but not give too much info to the average user
+
 0. **cookie age**
 
 1. **Use real session tokens instead of user IDs in cookies**  

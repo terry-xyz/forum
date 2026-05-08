@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mattn/go-sqlite3"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const sessionCookieMaxAge = 60 * 60 * 24
@@ -41,8 +42,15 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 			username := r.FormValue("username")
 			password := r.FormValue("password")
 
+			// Store only a bcrypt hash so a database leak does not expose raw passwords.
+			hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+			if err != nil {
+				http.Error(w, "unable to create user", http.StatusInternalServerError)
+				return
+			}
+
 			// The database layer owns uniqueness enforcement through constraints.
-			err := database.CreateUser(db, email, username, password)
+			err = database.CreateUser(db, email, username, string(hashedPassword))
 			if err != nil {
 				// Duplicate email or username values are reported by SQLite as constraint errors.
 				if isConstraintError(err) {
@@ -53,6 +61,7 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 				http.Error(w, "unable to create user", http.StatusInternalServerError)
 				return
 			}
+
 			// Redirect after a successful POST so browser refresh does not submit
 			// the same registration again.
 			http.Redirect(w, r, "/register", http.StatusSeeOther)
@@ -104,13 +113,20 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 				return
 			}
 
-			// Use one message for both cases so the response does not reveal which emails exist.
-			if user == nil || user.Password != password {
+			// Use the same response for unknown emails and bad passwords so login
+			// attempts cannot reveal which accounts exist.
+			if user == nil {
 				http.Error(w, "invalid email or password", http.StatusUnauthorized)
 				return
 			}
 
-			// sessionID, err := helpers.GenerateSessionID()
+			// CompareHashAndPassword validates the submitted password against the
+			// stored bcrypt hash without needing the original password.
+			err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
+			if err != nil {
+				http.Error(w, "invalid email or password", http.StatusUnauthorized)
+				return
+			}
 
 			// Store the current user ID in an HttpOnly cookie. This is the
 			// lightweight session mechanism used throughout the handlers.

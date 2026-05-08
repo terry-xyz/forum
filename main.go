@@ -27,6 +27,8 @@ func main() {
 	http.HandleFunc("/comment", handlers.CreateCommentHandler(db))
 	http.HandleFunc("/post-reaction", handlers.ReactPostHandler(db))
 	http.HandleFunc("/comment-reaction", handlers.ReactCommentHandler(db))
+	http.HandleFunc("/my-posts", handlers.MyPostsHandler(db))
+	http.HandleFunc("/liked-posts", handlers.LikedPostsHandler(db))
 
 	// Serve the forum on the local development port and report startup/runtime
 	// errors to stdout instead of panicking.

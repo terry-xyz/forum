@@ -46,6 +46,11 @@ CREATE TABLE IF NOT EXISTS categories (
     name TEXT NOT NULL UNIQUE
 );
 
+INSERT OR IGNORE INTO categories (name) VALUES ('General');
+INSERT OR IGNORE INTO categories (name) VALUES ('Programming');
+INSERT OR IGNORE INTO categories (name) VALUES ('Gaming');
+INSERT OR IGNORE INTO categories (name) VALUES ('Music');
+
 CREATE TABLE IF NOT EXISTS post_categories (
     post_id INTEGER NOT NULL,
     category_id INTEGER NOT NULL,

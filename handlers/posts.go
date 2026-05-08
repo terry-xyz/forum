@@ -117,3 +117,100 @@ func CreatePostHandler(db *sql.DB) http.HandlerFunc {
 
 	}
 }
+
+// MyPostsHandler renders posts created by the current session user.
+func MyPostsHandler(db *sql.DB) http.HandlerFunc {
+
+	// Capture the database dependency once so each request can reuse it.
+	return func(w http.ResponseWriter, r *http.Request) {
+		// The filtered list is read-only, so non-GET methods are rejected early.
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// The session cookie identifies which author's posts should be listed.
+		cookie, err := r.Cookie("session")
+		if err != nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// Session values are stored as numeric user IDs, so invalid values cannot
+		// be used in the author filter.
+		userID, err := strconv.Atoi(cookie.Value)
+		if err != nil {
+			http.Error(w, "invalid session", http.StatusUnauthorized)
+			return
+		}
+
+		// Query by author_id so the page shows only posts owned by this user.
+		posts, err := database.GetPostsByAuthorID(db, userID)
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/html")
+		if len(posts) == 0 {
+			// Empty results are valid for new users, so render an empty-state message.
+			w.Write([]byte("<p>You have not created any posts yet.</p>"))
+			return
+		} else {
+			// Reuse the feed renderer so reaction and comment markup stays identical.
+			err = renderPosts(w, db, posts)
+			if err != nil {
+				http.Error(w, "failed to render posts", http.StatusInternalServerError)
+				return
+			}
+		}
+	}
+}
+
+// LikedPostsHandler renders posts liked by the current session user.
+func LikedPostsHandler(db *sql.DB) http.HandlerFunc {
+
+	// Capture the database dependency once so every request shares it.
+	return func(w http.ResponseWriter, r *http.Request) {
+		// The liked-posts page only reads data, so it accepts GET requests only.
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// The session cookie identifies which user's reaction rows should be used.
+		cookie, err := r.Cookie("session")
+		if err != nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// Invalid cookie values cannot safely join against reaction user IDs.
+		userID, err := strconv.Atoi(cookie.Value)
+		if err != nil {
+			http.Error(w, "invalid session", http.StatusUnauthorized)
+			return
+		}
+
+		// Join through post_reactions so only posts this user liked are returned.
+		posts, err := database.GetLikedPostsByUserID(db, userID)
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/html")
+		if len(posts) == 0 {
+			// Empty results are valid when the user has not liked anything yet.
+			w.Write([]byte("<p>You don't have any liked posts yet.</p>"))
+			return
+		} else {
+			// Reuse the feed renderer so reaction and comment markup stays identical.
+			err = renderPosts(w, db, posts)
+			if err != nil {
+				http.Error(w, "failed to render posts", http.StatusInternalServerError)
+				return
+			}
+		}
+	}
+}

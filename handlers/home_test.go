@@ -146,12 +146,13 @@ func TestHomeHandlerReportsMissingCommentAuthor(t *testing.T) {
 
 	HomeHandler(db)(w, req)
 
-	// The handler has already written the filter bar before this late error, so
-	// httptest keeps the status at 200 while the body contains the error text.
+	// The handler has already written the filter bar before this late render
+	// error, so httptest keeps the status at 200 while the body contains the
+	// generic client-facing message.
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body = %q", w.Code, http.StatusOK, w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), "invalid comment author") {
-		t.Fatalf("body = %q, want invalid comment author message", w.Body.String())
+	if !strings.Contains(w.Body.String(), "failed to render posts") {
+		t.Fatalf("body = %q, want render failure message", w.Body.String())
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"forum/database"
 
 	_ "github.com/mattn/go-sqlite3"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // TestRegisterHandlerRejectsDuplicateUser verifies duplicate account conflicts
@@ -79,7 +80,7 @@ func TestLoginHandlerRejectsWrongPassword(t *testing.T) {
 	// Insert a real account so the failure is specifically the password check.
 	db := openTestDB(t)
 
-	if err := database.CreateUser(db, "user@example.com", "user", "password"); err != nil {
+	if err := database.CreateUser(db, "user@example.com", "user", hashPasswordForTest(t, "password")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -110,7 +111,7 @@ func TestLoginHandlerSetsSessionCookie(t *testing.T) {
 	// Insert the account that the login request will authenticate.
 	db := openTestDB(t)
 
-	if err := database.CreateUser(db, "user@example.com", "user", "password"); err != nil {
+	if err := database.CreateUser(db, "user@example.com", "user", hashPasswordForTest(t, "password")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -214,4 +215,18 @@ func openTestDB(t *testing.T) *sql.DB {
 	}
 
 	return db
+}
+
+// hashPasswordForTest returns a bcrypt hash so login tests match stored production credentials.
+func hashPasswordForTest(t *testing.T, password string) string {
+	t.Helper()
+
+	// LoginHandler compares submitted passwords against bcrypt hashes, so test
+	// fixtures must store the same format that RegisterHandler writes.
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return string(hashedPassword)
 }

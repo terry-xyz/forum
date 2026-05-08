@@ -96,3 +96,84 @@ func GetPostsByCategoryID(db *sql.DB, categoryID int) ([]models.Post, error) {
 
 	return posts, nil
 }
+
+// GetPostsByAuthorID returns posts created by one user in newest-first order.
+func GetPostsByAuthorID(db *sql.DB, authorID int) ([]models.Post, error) {
+
+	// Filter by author_id because the session user ID maps directly to posts.author_id.
+	query := `
+		SELECT id, author_id, title, content, created_at
+		FROM posts
+		WHERE author_id = ?
+		ORDER BY created_at DESC
+	`
+	rows, err := db.Query(query, authorID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Close the filtered cursor so the connection is available for later queries.
+	defer rows.Close()
+
+	var posts []models.Post
+
+	// Scan into the same model shape used by the full feed renderer.
+	for rows.Next() {
+		var post models.Post
+
+		err := rows.Scan(&post.ID, &post.AuthorID, &post.Title, &post.Content, &post.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+
+		posts = append(posts, post)
+	}
+
+	// Return delayed cursor errors that can happen after Query succeeds.
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return posts, nil
+}
+
+// GetLikedPostsByUserID returns posts the user liked, ordered newest first.
+func GetLikedPostsByUserID(db *sql.DB, userID int) ([]models.Post, error) {
+
+	// Join through post_reactions because liked posts are defined by reaction rows.
+	query := `
+		SELECT p.id, p.author_id, p.title, p.content, p.created_at
+		FROM posts p
+		JOIN post_reactions pr ON pr.post_id = p.id
+		WHERE pr.user_id = ? AND pr.reaction_type = 'like'
+		ORDER BY p.created_at DESC
+	`
+	rows, err := db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Close the joined cursor so the connection is available for later queries.
+	defer rows.Close()
+
+	var posts []models.Post
+
+	// Scan only post columns because reaction metadata is used only for filtering.
+	for rows.Next() {
+		var post models.Post
+
+		err := rows.Scan(&post.ID, &post.AuthorID, &post.Title, &post.Content, &post.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+
+		posts = append(posts, post)
+	}
+
+	// Return delayed cursor errors that can happen after Query succeeds.
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return posts, nil
+}
