@@ -25,8 +25,12 @@ func CreateCommentHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 		// Convert the session value into the comment author ID.
-		authorID, err := strconv.Atoi(cookie.Value)
+		authorID, err := database.GetUserIDBySessionID(db, cookie.Value)
 		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if authorID == 0 {
 			http.Error(w, "invalid session", http.StatusUnauthorized)
 			return
 		}
@@ -53,6 +57,56 @@ func CreateCommentHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		// Return to the feed where the new comment should appear.
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	}
+}
+
+// DeleteCommentHandler removes a comment only when the current session user owns it.
+func DeleteCommentHandler(db *sql.DB) http.HandlerFunc {
+
+	// Capture the database handle for the ownership-scoped delete.
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Comments are deleted from rendered forms, so only POST is accepted.
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// The session is needed to prevent deleting another user's comment.
+		cookie, err := r.Cookie("session")
+		if err != nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// Resolve the session token into the author ID used by the delete query.
+		userID, err := database.GetUserIDBySessionID(db, cookie.Value)
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if userID == 0 {
+			http.Error(w, "invalid session", http.StatusUnauthorized)
+			return
+		}
+
+		// The comment ID comes from the hidden field beside the rendered comment.
+		commentIDStr := r.FormValue("comment_id")
+		commentID, err := strconv.Atoi(commentIDStr)
+		if err != nil {
+			http.Error(w, "invalid comment id", http.StatusBadRequest)
+			return
+		}
+
+		// The database helper includes author_id in the WHERE clause so users
+		// cannot remove comments they do not own.
+		err = database.DeleteCommentByIDAndAuthorID(db, commentID, userID)
+		if err != nil {
+			http.Error(w, "unable to delete comment", http.StatusInternalServerError)
+			return
+		}
+
+		// Return to the feed after the comment has been removed.
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	}
 }

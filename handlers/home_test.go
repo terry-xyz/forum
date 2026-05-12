@@ -72,10 +72,11 @@ func TestHomeHandlerRendersPostsWithAuthors(t *testing.T) {
 	if _, err := database.CreatePost(db, user.ID, "First post", "Hello forum"); err != nil {
 		t.Fatal(err)
 	}
+	sessionID := createSessionForUserID(t, db, "home-session", user.ID)
 
 	// Add a valid session cookie so authenticated navigation and forms are shown.
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.AddCookie(&http.Cookie{Name: "session", Value: "1"})
+	req.AddCookie(&http.Cookie{Name: "session", Value: sessionID})
 	w := httptest.NewRecorder()
 
 	HomeHandler(db)(w, req)
@@ -145,10 +146,11 @@ func TestHomeHandlerReportsMissingCommentAuthor(t *testing.T) {
 	if posts[0].ID != postID {
 		t.Fatalf("post id = %d, want %d", posts[0].ID, postID)
 	}
+	sessionID := createSessionForUserID(t, db, "home-comment-session", user.ID)
 
 	// Authenticate as the valid user so rendering reaches the comments block.
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.AddCookie(&http.Cookie{Name: "session", Value: "1"})
+	req.AddCookie(&http.Cookie{Name: "session", Value: sessionID})
 	w := httptest.NewRecorder()
 
 	HomeHandler(db)(w, req)

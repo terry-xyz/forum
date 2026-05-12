@@ -12,6 +12,9 @@
 
 ---
 
+0. **dont generate same session id again**
+   although there is an extremly slight chance of it happening, the random generator might generate the same sessionID twice. we should prevent that.
+
 0. **log errors**
    for example with each "http.Error(...)" we should also send a "fmt.Println("...", err)" to help ourselves as developers but not give too much info to the average user
 

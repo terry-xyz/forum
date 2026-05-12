@@ -91,6 +91,16 @@ func renderPosts(w http.ResponseWriter, db *sql.DB, posts []models.Post, current
 				</form>`,
 			))
 		}
+		if currentUser != nil && currentUser.ID == p.AuthorID {
+			// Show the delete form only to the post author; the handler repeats
+			// this ownership check before deleting.
+			w.Write([]byte(`
+				<form method="POST" action="/delete-post">
+					<input type="hidden" name="post_id" value="` + strconv.Itoa(p.ID) + `">
+					<button type="submit">Delete post</button>
+				</form>
+			`))
+		}
 		// Render comments below their owning post, preserving the same index
 		// into commentAuthors that was built during validation.
 		for i, c := range comments {
@@ -125,6 +135,16 @@ func renderPosts(w http.ResponseWriter, db *sql.DB, posts []models.Post, current
 						<button type="submit">Dislike</button>
 					</form>`,
 				))
+			}
+
+			if currentUser != nil && currentUser.ID == c.AuthorID {
+				// Show the delete form only beside comments owned by the current user.
+				w.Write([]byte(`
+					<form method="POST" action="/delete-comment">
+						<input type="hidden" name="comment_id" value="` + strconv.Itoa(c.ID) + `">
+						<button type="submit">Delete comment</button>
+					</form>
+				`))
 			}
 		}
 		// Separate posts visually in the simple HTML output.

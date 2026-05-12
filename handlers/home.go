@@ -24,9 +24,13 @@ func HomeHandler(db *sql.DB) http.HandlerFunc {
 			// leaves currentUser nil and hides authenticated actions.
 			cookie, err := r.Cookie("session")
 			if err == nil {
-				cookieID, err := strconv.Atoi(cookie.Value)
-				if err == nil {
-					currentUser, err = database.GetUserByID(db, cookieID)
+				userID, err := database.GetUserIDBySessionID(db, cookie.Value)
+				if err != nil {
+					http.Error(w, "internal error", http.StatusInternalServerError)
+					return
+				}
+				if userID != 0 {
+					currentUser, err = database.GetUserByID(db, userID)
 					if err != nil {
 						http.Error(w, "internal error", http.StatusInternalServerError)
 						return

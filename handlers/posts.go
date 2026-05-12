@@ -19,9 +19,13 @@ func CreatePostHandler(db *sql.DB) http.HandlerFunc {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		// The session cookie currently stores the numeric user ID directly.
-		id, err := strconv.Atoi(cookie.Value)
+		// Resolve the opaque session token into the post author ID.
+		id, err := database.GetUserIDBySessionID(db, cookie.Value)
 		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if id == 0 {
 			http.Error(w, "invalid session", http.StatusUnauthorized)
 			return
 		}
@@ -136,10 +140,13 @@ func MyPostsHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Session values are stored as numeric user IDs, so invalid values cannot
-		// be used in the author filter.
-		userID, err := strconv.Atoi(cookie.Value)
+		// Resolve the opaque session token before using it in the author filter.
+		userID, err := database.GetUserIDBySessionID(db, cookie.Value)
 		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if userID == 0 {
 			http.Error(w, "invalid session", http.StatusUnauthorized)
 			return
 		}
@@ -198,8 +205,12 @@ func LikedPostsHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		// Invalid cookie values cannot safely join against reaction user IDs.
-		userID, err := strconv.Atoi(cookie.Value)
+		userID, err := database.GetUserIDBySessionID(db, cookie.Value)
 		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if userID == 0 {
 			http.Error(w, "invalid session", http.StatusUnauthorized)
 			return
 		}
@@ -236,5 +247,60 @@ func LikedPostsHandler(db *sql.DB) http.HandlerFunc {
 				return
 			}
 		}
+	}
+}
+
+// DeletePostHandler removes a post only when the current session user owns it.
+func DeletePostHandler(db *sql.DB) http.HandlerFunc {
+
+	// Capture the database handle so the delete path can verify ownership.
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Deletes come from rendered forms, so this endpoint only accepts POST.
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// A session is required because the delete query checks the post author.
+		cookie, err := r.Cookie("session")
+		if err != nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// Resolve the session into the user ID used by the ownership check.
+		userID, err := database.GetUserIDBySessionID(db, cookie.Value)
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if userID == 0 {
+			http.Error(w, "invalid session", http.StatusUnauthorized)
+			return
+		}
+
+		// The post ID comes from the hidden field rendered beside owned posts.
+		postIDStr := r.FormValue("post_id")
+		postID, err := strconv.Atoi(postIDStr)
+		if err != nil {
+			http.Error(w, "invalid post id", http.StatusBadRequest)
+			return
+		}
+
+		// The database helper deletes related rows in one transaction after
+		// confirming this user is the author.
+		err = database.DeletePostByIDAndAuthorID(db, postID, userID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				http.Error(w, "post not found or not yours", http.StatusForbidden)
+				return
+			}
+
+			http.Error(w, "unable to delete post", http.StatusInternalServerError)
+			return
+		}
+
+		// Return to the feed where the removed post should no longer appear.
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 	}
 }

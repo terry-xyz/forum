@@ -56,3 +56,10 @@ CREATE TABLE IF NOT EXISTS post_categories (
     category_id INTEGER NOT NULL,
     UNIQUE (post_id, category_id)
 );
+
+CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

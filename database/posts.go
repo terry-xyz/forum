@@ -177,3 +177,82 @@ func GetLikedPostsByUserID(db *sql.DB, userID int) ([]models.Post, error) {
 
 	return posts, nil
 }
+
+// DeletePostByIDAndAuthorID removes a post and its dependent rows only when the author matches.
+func DeletePostByIDAndAuthorID(db *sql.DB, postID int, authorID int) error {
+	// A transaction keeps the post, comments, category links, and reactions in
+	// sync if any dependent delete fails.
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	// If something fails before Commit, undo all deletes from this transaction.
+	rollback := func() {
+		_ = tx.Rollback()
+	}
+
+	var exists int
+
+	// Confirm ownership before deleting dependent rows so unauthorized requests
+	// cannot remove comments or reactions by guessing a post ID.
+	err = tx.QueryRow(
+		"SELECT COUNT(*) FROM posts WHERE id = ? AND author_id = ?",
+		postID,
+		authorID,
+	).Scan(&exists)
+	if err != nil {
+		rollback()
+		return err
+	}
+
+	if exists == 0 {
+		rollback()
+		return sql.ErrNoRows
+	}
+
+	// Reactions attached directly to the post must go before the post row disappears.
+	deletePostReactionsQuery := `DELETE FROM post_reactions WHERE post_id = ?`
+	// Comment reactions reference comments, so delete them before deleting comments.
+	deleteCommentReactionsQuery := `
+		DELETE FROM comment_reactions
+		WHERE comment_id IN (
+			SELECT id FROM comments WHERE post_id = ?
+		)
+	`
+	// Comments and category links depend on the post and are removed explicitly
+	// so this helper works even without relying on cascade behavior.
+	deleteCommentsQuery := `DELETE FROM comments WHERE post_id = ?`
+	deletePostCategoriesQuery := `DELETE FROM post_categories WHERE post_id = ?`
+	// Include author_id again in the final delete to preserve the ownership guard.
+	deletePostQuery := `DELETE FROM posts WHERE id = ? AND author_id = ?`
+
+	_, err = tx.Exec(deletePostReactionsQuery, postID)
+	if err != nil {
+		rollback()
+		return err
+	}
+	_, err = tx.Exec(deleteCommentReactionsQuery, postID)
+	if err != nil {
+		rollback()
+		return err
+	}
+	_, err = tx.Exec(deleteCommentsQuery, postID)
+	if err != nil {
+		rollback()
+		return err
+	}
+	_, err = tx.Exec(deletePostCategoriesQuery, postID)
+	if err != nil {
+		rollback()
+		return err
+	}
+	_, err = tx.Exec(deletePostQuery, postID, authorID)
+	if err != nil {
+		rollback()
+		return err
+	}
+
+	// Commit makes the dependent deletes visible together.
+	return tx.Commit()
+}

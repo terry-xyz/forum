@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"forum/database"
 
@@ -154,15 +155,28 @@ func TestLoginHandlerSetsSessionCookie(t *testing.T) {
 	if cookie.MaxAge <= 0 {
 		t.Fatalf("max age = %d, want positive value", cookie.MaxAge)
 	}
+
+	user, err := database.GetUserByEmail(db, "user@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	userID, err := database.GetUserIDBySessionID(db, cookie.Value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if userID != user.ID {
+		t.Fatalf("session user id = %d, want %d", userID, user.ID)
+	}
 }
 
 // TestLogoutHandlerExpiresSessionCookie verifies logout clears browser session state.
 func TestLogoutHandlerExpiresSessionCookie(t *testing.T) {
-	// Logout does not need a database, only a request/response pair.
+	db := openTestDB(t)
+
 	req := httptest.NewRequest(http.MethodGet, "/logout", nil)
 	w := httptest.NewRecorder()
 
-	LogoutHandler()(w, req)
+	LogoutHandler(db)(w, req)
 
 	// Logout redirects after writing the expired cookie.
 	if w.Code != http.StatusSeeOther {
@@ -189,6 +203,26 @@ func TestLogoutHandlerExpiresSessionCookie(t *testing.T) {
 	}
 	if cookie.SameSite != http.SameSiteLaxMode {
 		t.Fatalf("same site = %v, want %v", cookie.SameSite, http.SameSiteLaxMode)
+	}
+}
+
+// TestLogoutHandlerDeletesServerSession verifies logout invalidates the stored token.
+func TestLogoutHandlerDeletesServerSession(t *testing.T) {
+	db := openTestDB(t)
+	sessionID := createSessionForTest(t, db, "user@example.com")
+
+	req := httptest.NewRequest(http.MethodGet, "/logout", nil)
+	req.AddCookie(&http.Cookie{Name: "session", Value: sessionID})
+	w := httptest.NewRecorder()
+
+	LogoutHandler(db)(w, req)
+
+	userID, err := database.GetUserIDBySessionID(db, sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if userID != 0 {
+		t.Fatalf("session user id after logout = %d, want 0", userID)
 	}
 }
 
@@ -229,4 +263,34 @@ func hashPasswordForTest(t *testing.T, password string) string {
 	}
 
 	return string(hashedPassword)
+}
+
+// createSessionForTest creates a user and maps a stable session token to it.
+func createSessionForTest(t *testing.T, db *sql.DB, email string) string {
+	t.Helper()
+
+	if err := database.CreateUser(db, email, "user-"+email, hashPasswordForTest(t, "password")); err != nil {
+		t.Fatal(err)
+	}
+	user, err := database.GetUserByEmail(db, email)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user == nil {
+		t.Fatal("user was not created")
+	}
+
+	return createSessionForUserID(t, db, "session-"+email, user.ID)
+}
+
+// createSessionForUserID maps a stable session token to an existing test user.
+func createSessionForUserID(t *testing.T, db *sql.DB, sessionID string, userID int) string {
+	t.Helper()
+
+	expiresAt := time.Now().Add(time.Hour)
+	if err := database.CreateSession(db, sessionID, userID, expiresAt); err != nil {
+		t.Fatal(err)
+	}
+
+	return sessionID
 }

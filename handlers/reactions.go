@@ -26,8 +26,12 @@ func ReactPostHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		// Convert the session cookie into the reacting user's ID.
-		userID, err := strconv.Atoi(cookie.Value)
+		userID, err := database.GetUserIDBySessionID(db, cookie.Value)
 		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if userID == 0 {
 			http.Error(w, "invalid session", http.StatusUnauthorized)
 			return
 		}
@@ -77,8 +81,12 @@ func ReactCommentHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		// Convert the current session into the reacting user ID.
-		userID, err := strconv.Atoi(cookie.Value)
+		userID, err := database.GetUserIDBySessionID(db, cookie.Value)
 		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if userID == 0 {
 			http.Error(w, "invalid session", http.StatusUnauthorized)
 			return
 		}

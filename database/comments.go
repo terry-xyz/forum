@@ -59,3 +59,21 @@ func GetCommentsByPostID(db *sql.DB, postID int) ([]models.Comment, error) {
 
 	return comments, nil
 }
+
+// DeleteCommentByIDAndAuthorID removes a comment only when the author matches.
+func DeleteCommentByIDAndAuthorID(db *sql.DB, commentID int, authorID int) error {
+
+	// Include author_id in the WHERE clause so a guessed comment ID cannot
+	// delete another user's comment.
+	query := `
+		DELETE FROM comments
+		WHERE id = ? AND author_id = ?
+	`
+	_, err := db.Exec(query, commentID, authorID)
+	if err != nil {
+		return err
+	}
+
+	// A zero-row delete is not treated as an error by this helper.
+	return nil
+}

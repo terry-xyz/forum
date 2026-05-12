@@ -25,6 +25,7 @@ func TestCreatePostHandlerCreatesPost(t *testing.T) {
 	if user == nil {
 		t.Fatal("user was not created")
 	}
+	sessionID := createSessionForUserID(t, db, "create-post-session", user.ID)
 
 	// Build a form submission matching the create-post endpoint.
 	form := url.Values{
@@ -34,7 +35,7 @@ func TestCreatePostHandlerCreatesPost(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodPost, "/create-post", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(&http.Cookie{Name: "session", Value: "1"})
+	req.AddCookie(&http.Cookie{Name: "session", Value: sessionID})
 	w := httptest.NewRecorder()
 
 	CreatePostHandler(db)(w, req)
@@ -59,14 +60,15 @@ func TestCreatePostHandlerCreatesPost(t *testing.T) {
 	}
 }
 
-// TestCreatePostHandlerRejectsInvalidSession covers non-numeric session values.
+// TestCreatePostHandlerRejectsInvalidSession covers unknown session tokens.
 func TestCreatePostHandlerRejectsInvalidSession(t *testing.T) {
-	// The malformed cookie should be rejected before the database is touched.
+	db := openTestDB(t)
+
 	req := httptest.NewRequest(http.MethodPost, "/create-post", nil)
 	req.AddCookie(&http.Cookie{Name: "session", Value: "bad-session"})
 	w := httptest.NewRecorder()
 
-	CreatePostHandler(nil)(w, req)
+	CreatePostHandler(db)(w, req)
 
 	// Invalid sessions are authentication failures.
 	if w.Code != http.StatusUnauthorized {

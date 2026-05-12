@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"forum/database"
+	"forum/helpers"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/mattn/go-sqlite3"
@@ -128,11 +128,25 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 				return
 			}
 
-			// Store the current user ID in an HttpOnly cookie. This is the
-			// lightweight session mechanism used throughout the handlers.
+			sessionID, err := helpers.GenerateSessionID()
+			if err != nil {
+				http.Error(w, "unable to create session", http.StatusInternalServerError)
+				return
+			}
+
+			expiresAt := time.Now().Add(time.Second * sessionCookieMaxAge)
+
+			err = database.CreateSession(db, sessionID, user.ID, expiresAt)
+			if err != nil {
+				http.Error(w, "unable to create session", http.StatusInternalServerError)
+				return
+			}
+
+			// Store only the random session ID in the browser; the database maps
+			// it back to the user for later requests.
 			http.SetCookie(w, &http.Cookie{
 				Name:     "session",
-				Value:    strconv.Itoa(user.ID),
+				Value:    sessionID,
 				Path:     "/",
 				MaxAge:   sessionCookieMaxAge,
 				HttpOnly: true,
@@ -148,10 +162,18 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 	}
 }
 
-// LogoutHandler clears the session cookie and returns the user to the home page.
-func LogoutHandler() http.HandlerFunc {
+// LogoutHandler clears the session cookie, invalidates its database row, and returns the user to the home page.
+func LogoutHandler(db *sql.DB) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie("session")
+		if err == nil {
+			if err := database.DeleteSession(db, cookie.Value); err != nil {
+				http.Error(w, "unable to log out", http.StatusInternalServerError)
+				return
+			}
+		}
+
 		// Reissue the same cookie name with MaxAge -1 and an old Expires value
 		// so browsers remove it from storage.
 		http.SetCookie(w, &http.Cookie{
