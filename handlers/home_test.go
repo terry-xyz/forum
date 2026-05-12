@@ -27,22 +27,29 @@ func TestHomeHandlerRejectsUnsupportedMethod(t *testing.T) {
 	}
 }
 
-// TestHomeHandlerRejectsMissingSession verifies authentication is required.
-func TestHomeHandlerRejectsMissingSession(t *testing.T) {
-	// Do not attach a session cookie so the handler takes the unauthorized path.
+// TestHomeHandlerAllowsGuestSession verifies guests can read the public feed.
+func TestHomeHandlerAllowsGuestSession(t *testing.T) {
+	// Guest rendering still needs the database because the feed and category
+	// filters are loaded before the navigation is written.
+	db := openTestDB(t)
+
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
 
-	HomeHandler(nil)(w, req)
+	HomeHandler(db)(w, req)
 
-	// Missing sessions should be rejected before any database query.
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want %d", w.Code, http.StatusUnauthorized)
+	// Missing sessions should still render the public home page.
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 	}
 
-	// The body should contain the unauthorized message used by the handler.
-	if !strings.Contains(w.Body.String(), "unauthorized") {
-		t.Fatalf("body = %q, want unauthorized message", w.Body.String())
+	// Guests get auth links, while actions that submit user-owned data stay hidden.
+	body := w.Body.String()
+	if !strings.Contains(body, `<a href="/login">Login</a>`) {
+		t.Fatalf("body = %q, want login link", body)
+	}
+	if strings.Contains(body, `<a href="/create-post">Create post</a>`) {
+		t.Fatalf("body = %q, want create-post link hidden for guests", body)
 	}
 }
 
@@ -66,7 +73,7 @@ func TestHomeHandlerRendersPostsWithAuthors(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Add a valid session cookie because HomeHandler requires authentication.
+	// Add a valid session cookie so authenticated navigation and forms are shown.
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.AddCookie(&http.Cookie{Name: "session", Value: "1"})
 	w := httptest.NewRecorder()

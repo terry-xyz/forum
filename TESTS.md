@@ -1,5 +1,19 @@
+[12/05/2026]
+   1. Make home page visible to guests
+   2. Proper sessions table
+   3. Form validation + escaping/template cleanup
+   4. Edit/delete posts and comments
+   5. Activity page
+   6. Notifications
+   7. Image upload
+   8. OAuth Google/GitHub
+   9. Docker
+   10. Tests
+
+---
+
 0. **log errors**
-   for example with each "http.Error(...)" we should also send a "fmt.Println("...", err)" to help ourselfs as developers but not give too much info to the average user
+   for example with each "http.Error(...)" we should also send a "fmt.Println("...", err)" to help ourselves as developers but not give too much info to the average user
 
 0. **cookie age**
 
