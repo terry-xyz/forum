@@ -10,8 +10,8 @@ import (
 	"strings"
 )
 
-// renderPosts writes feed markup for posts after loading related authors, categories, comments, and reactions.
-func renderPosts(w http.ResponseWriter, db *sql.DB, posts []models.Post) error {
+// renderPosts writes feed markup and shows action forms only when currentUser is not nil.
+func renderPosts(w http.ResponseWriter, db *sql.DB, posts []models.Post, currentUser *models.User) error {
 	for _, p := range posts {
 		// Resolve author IDs while rendering so the UI can show usernames.
 		author, err := database.GetUserByID(db, p.AuthorID)
@@ -61,13 +61,18 @@ func renderPosts(w http.ResponseWriter, db *sql.DB, posts []models.Post) error {
 			commentAuthors = append(commentAuthors, commentAuthor.Username)
 		}
 
-		// Write the post body, reaction forms, and comment form in one block.
+		// Write public post details first so guests and logged-in users share
+		// the same read-only feed markup.
 		w.Write([]byte(
 			"<h3>" + p.Title + "</h3>" +
 				"<p>" + p.Content + "</p>" +
 				"<small>Author: " + author.Username + "</small>" +
 				"<p>Categories: " + categoryHTML.String() + "</p>" +
-				"<p>Likes: " + strconv.Itoa(postLikes) + " | Dislikes: " + strconv.Itoa(postDislikes) + "</p>" +
+				"<p>Likes: " + strconv.Itoa(postLikes) + " | Dislikes: " + strconv.Itoa(postDislikes) + "</p>",
+		))
+		if currentUser != nil {
+			// Only logged-in users can submit reactions or comments.
+			w.Write([]byte(
 				`<form method="POST" action="/post-reaction">
 					<input type="hidden" name="post_id" value="` + strconv.Itoa(p.ID) + `">
 					<input type="hidden" name="reaction_type" value="like">
@@ -79,12 +84,13 @@ func renderPosts(w http.ResponseWriter, db *sql.DB, posts []models.Post) error {
 					<input type="hidden" name="reaction_type" value="dislike">
 					<button type="submit">Dislike</button>
 				</form>` +
-				`<form method="POST" action="/comment">
+					`<form method="POST" action="/comment">
 					<input type="hidden" name="post_id" value="` + strconv.Itoa(p.ID) + `">
 					<textarea name="content"></textarea>
 					<button type="submit">Comment</button>
 				</form>`,
-		))
+			))
+		}
 		// Render comments below their owning post, preserving the same index
 		// into commentAuthors that was built during validation.
 		for i, c := range comments {
@@ -101,7 +107,12 @@ func renderPosts(w http.ResponseWriter, db *sql.DB, posts []models.Post) error {
 			w.Write([]byte(
 				"<h5>" + commentAuthors[i] + "</h5>" +
 					"<p>" + c.Content + "</p>" +
-					"<p>Likes: " + strconv.Itoa(commentLikes) + " | Dislikes: " + strconv.Itoa(commentDislikes) + "</p>" +
+					"<p>Likes: " + strconv.Itoa(commentLikes) + " | Dislikes: " + strconv.Itoa(commentDislikes) + "</p>",
+			))
+
+			if currentUser != nil {
+				// Comment reactions follow the same auth rule as post reactions.
+				w.Write([]byte(
 					`<form method="POST" action="/comment-reaction">
 						<input type="hidden" name="comment_id" value="` + strconv.Itoa(c.ID) + `">
 						<input type="hidden" name="reaction_type" value="like">
@@ -113,7 +124,8 @@ func renderPosts(w http.ResponseWriter, db *sql.DB, posts []models.Post) error {
 						<input type="hidden" name="reaction_type" value="dislike">
 						<button type="submit">Dislike</button>
 					</form>`,
-			))
+				))
+			}
 		}
 		// Separate posts visually in the simple HTML output.
 		w.Write([]byte("<hr>"))

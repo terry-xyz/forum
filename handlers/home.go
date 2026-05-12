@@ -9,7 +9,7 @@ import (
 	"strconv"
 )
 
-// HomeHandler renders the forum home page for users with a valid session cookie.
+// HomeHandler renders the forum home page for guests and adds user actions when a session is valid.
 func HomeHandler(db *sql.DB) http.HandlerFunc {
 
 	// Capture the database handle for all requests served by this route.
@@ -18,29 +18,20 @@ func HomeHandler(db *sql.DB) http.HandlerFunc {
 		// The home page is currently read-only, so only GET is supported.
 		if r.Method == http.MethodGet {
 
-			// Require a session cookie before loading posts or rendering the page.
+			var currentUser *models.User
+
+			// Guests can view the feed, so a missing or invalid session simply
+			// leaves currentUser nil and hides authenticated actions.
 			cookie, err := r.Cookie("session")
-			if err != nil {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
-				return
-			}
-
-			// Session cookies currently store the user ID, so reject values that cannot be parsed.
-			cookieID, err := strconv.Atoi(cookie.Value)
-			if err != nil {
-				http.Error(w, "invalid session", http.StatusUnauthorized)
-				return
-			}
-
-			// Confirm that the user referenced by the session still exists.
-			user, err := database.GetUserByID(db, cookieID)
-			if err != nil {
-				http.Error(w, "internal error", http.StatusInternalServerError)
-				return
-			}
-			if user == nil {
-				http.Error(w, "invalid session", http.StatusUnauthorized)
-				return
+			if err == nil {
+				cookieID, err := strconv.Atoi(cookie.Value)
+				if err == nil {
+					currentUser, err = database.GetUserByID(db, cookieID)
+					if err != nil {
+						http.Error(w, "internal error", http.StatusInternalServerError)
+						return
+					}
+				}
 			}
 
 			// Choose between the default feed and a category-filtered feed based
@@ -89,13 +80,22 @@ func HomeHandler(db *sql.DB) http.HandlerFunc {
 			}
 			w.Write([]byte(`</p><hr>`))
 
-			w.Write([]byte(`
-				<a href="/my-posts">My posts</a>
-				<a href="/liked-posts">Liked posts</a>
-			`))
+			if currentUser != nil {
+				w.Write([]byte(`
+					<a href="/create-post">Create post</a>
+					<a href="/my-posts">My posts</a>
+					<a href="/liked-posts">Liked posts</a>
+					<a href="/logout">Logout</a>
+				`))
+			} else {
+				w.Write([]byte(`
+					<a href="/login">Login</a>
+					<a href="/register">Register</a>
+				`))
+			}
 
 			// Render each post with its author, categories, reactions, and comments.
-			err = renderPosts(w, db, posts)
+			err = renderPosts(w, db, posts, currentUser)
 			if err != nil {
 				fmt.Println("renderPosts error:", err)
 				http.Error(w, "failed to render posts", http.StatusInternalServerError)
