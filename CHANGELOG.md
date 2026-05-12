@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0](https://platform.zone01.gr/git/ckotsalas/forum/compare/0.3.0...0.4.0) (2026-05-12)
+
+### Added
+
+- *(forum)* add post/comment deletion and switch to random encoded session/user IDs ([#33](https://platform.zone01.gr/git/ckotsalas/forum/commit/4d20e0db3ff712df22267b333977ee5bfbd3e0b7))
+
+### Other
+
+- *(handlers)* support guest home rendering ([#31](https://platform.zone01.gr/git/ckotsalas/forum/commit/47b6347e6be5fd5c19fcea6ea85520c6f03dad7f))
+
 ## [0.3.0](https://platform.zone01.gr/git/ckotsalas/forum/compare/0.2.0...0.3.0) (2026-05-08)
 
 ### Added
