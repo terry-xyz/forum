@@ -49,6 +49,75 @@ func TestRegisterHandlerRejectsDuplicateUser(t *testing.T) {
 	}
 }
 
+// TestRegisterHandlerRejectsInvalidRequiredFields verifies direct POSTs cannot bypass required fields.
+func TestRegisterHandlerRejectsInvalidRequiredFields(t *testing.T) {
+	tests := []struct {
+		name    string
+		email   string
+		user    string
+		pass    string
+		message string
+	}{
+		{
+			name:    "blank email",
+			email:   "   ",
+			user:    "user",
+			pass:    "password",
+			message: "invalid email format",
+		},
+		{
+			name:    "blank username",
+			email:   "user@example.com",
+			user:    "\t ",
+			pass:    "password",
+			message: "username cannot be empty",
+		},
+		{
+			name:    "blank password",
+			email:   "user@example.com",
+			user:    "user",
+			pass:    "   ",
+			message: "password must be at least 8 characters long",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := openTestDB(t)
+
+			form := url.Values{
+				"email":    {tt.email},
+				"username": {tt.user},
+				"password": {tt.pass},
+			}
+			req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			w := httptest.NewRecorder()
+
+			RegisterHandler(db)(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d", w.Code, http.StatusBadRequest)
+			}
+			if !strings.Contains(w.Body.String(), tt.message) {
+				t.Fatalf("body = %q, want %q", w.Body.String(), tt.message)
+			}
+
+			users, err := db.Query("SELECT id FROM users")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer users.Close()
+			if users.Next() {
+				t.Fatal("invalid registration inserted a user")
+			}
+			if err := users.Err(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 // TestLoginHandlerRejectsUnknownEmail verifies missing accounts cannot log in.
 func TestLoginHandlerRejectsUnknownEmail(t *testing.T) {
 	// Use an empty database so the submitted email is guaranteed to be unknown.
@@ -166,6 +235,63 @@ func TestLoginHandlerSetsSessionCookie(t *testing.T) {
 	}
 	if userID != user.ID {
 		t.Fatalf("session user id = %d, want %d", userID, user.ID)
+	}
+}
+
+// TestLoginHandlerInvalidatesPreviousSessions verifies one active session per user.
+func TestLoginHandlerInvalidatesPreviousSessions(t *testing.T) {
+	db := openTestDB(t)
+
+	if err := database.CreateUser(db, "user@example.com", "user", hashPasswordForTest(t, "password")); err != nil {
+		t.Fatal(err)
+	}
+	user, err := database.GetUserByEmail(db, "user@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user == nil {
+		t.Fatal("user was not created")
+	}
+
+	oldSessionID := createSessionForUserID(t, db, "old-session", user.ID)
+
+	form := url.Values{
+		"email":    {"user@example.com"},
+		"password": {"password"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+
+	LoginHandler(db)(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusSeeOther)
+	}
+
+	cookies := w.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("cookies = %d, want 1", len(cookies))
+	}
+	newSessionID := cookies[0].Value
+	if newSessionID == "" {
+		t.Fatal("new session cookie value is empty")
+	}
+
+	oldUserID, err := database.GetUserIDBySessionID(db, oldSessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if oldUserID != 0 {
+		t.Fatalf("old session user id = %d, want 0", oldUserID)
+	}
+
+	newUserID, err := database.GetUserIDBySessionID(db, newSessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if newUserID != user.ID {
+		t.Fatalf("new session user id = %d, want %d", newUserID, user.ID)
 	}
 }
 
