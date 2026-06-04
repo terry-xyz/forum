@@ -60,6 +60,74 @@ func TestCreatePostHandlerCreatesPost(t *testing.T) {
 	}
 }
 
+// TestCreatePostHandlerRejectsWhitespacePostFields verifies blank-looking posts cannot be created.
+func TestCreatePostHandlerRejectsWhitespacePostFields(t *testing.T) {
+	tests := []struct {
+		name    string
+		title   string
+		content string
+		message string
+	}{
+		{
+			name:    "blank title",
+			title:   "   ",
+			content: "Hello forum",
+			message: "title cannot be empty",
+		},
+		{
+			name:    "blank content",
+			title:   "First post",
+			content: "\t\n ",
+			message: "content cannot be empty",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := openTestDB(t)
+
+			if err := database.CreateUser(db, "author@example.com", "author", "password"); err != nil {
+				t.Fatal(err)
+			}
+			user, err := database.GetUserByEmail(db, "author@example.com")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if user == nil {
+				t.Fatal("user was not created")
+			}
+			sessionID := createSessionForUserID(t, db, "create-post-session", user.ID)
+
+			form := url.Values{
+				"title":        {tt.title},
+				"content":      {tt.content},
+				"category_ids": {"1"},
+			}
+			req := httptest.NewRequest(http.MethodPost, "/create-post", strings.NewReader(form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.AddCookie(&http.Cookie{Name: "session", Value: sessionID})
+			w := httptest.NewRecorder()
+
+			CreatePostHandler(db)(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d", w.Code, http.StatusBadRequest)
+			}
+			if !strings.Contains(w.Body.String(), tt.message) {
+				t.Fatalf("body = %q, want %q", w.Body.String(), tt.message)
+			}
+
+			posts, err := database.GetAllPosts(db)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(posts) != 0 {
+				t.Fatalf("posts = %d, want 0", len(posts))
+			}
+		})
+	}
+}
+
 // TestCreatePostHandlerRejectsInvalidSession covers unknown session tokens.
 func TestCreatePostHandlerRejectsInvalidSession(t *testing.T) {
 	db := openTestDB(t)
