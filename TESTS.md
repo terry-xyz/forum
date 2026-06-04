@@ -1,51 +1,58 @@
-[12/05/2026]
-   1. Make home page visible to guests
-   2. Proper sessions table
-   3. Form validation + escaping/template cleanup
-   4. Edit/delete posts and comments
-   5. Activity page
-   6. Notifications
-   7. Image upload
-   8. OAuth Google/GitHub
-   9. Docker
-   10. Tests
+# Basic forum status
 
----
+This file tracks only the basic forum requirements. Extras are intentionally out
+of scope.
 
-0. **dont generate same session id again**
-   although there is an extremly slight chance of it happening, the random generator might generate the same sessionID twice. we should prevent that.
+## Verified
 
-0. **log errors**
-   for example with each "http.Error(...)" we should also send a "fmt.Println("...", err)" to help ourselves as developers but not give too much info to the average user
+- `go test ./...` passes.
+- Test files exist for handlers, database helpers, schema execution, seed data,
+  and session ID generation.
+- Docker image builds successfully, and the container serves the forum on port
+  `8080`.
+- SQLite is used, and the schema contains `CREATE`, `INSERT`, and application
+  code uses `SELECT`.
+- Registration asks for email, username, and password.
+- Registration rejects invalid/empty email, empty username, and empty/short
+  password submissions with `400 Bad Request`.
+- Duplicate email/username registration is rejected.
+- Login rejects unknown emails and wrong passwords.
+- Successful login creates an expiring `session` cookie with `HttpOnly` and
+  `SameSite=Lax`.
+- Successful login invalidates the user's previous sessions, so only the newest
+  browser session remains active.
+- Logout deletes the server session and expires the browser cookie.
+- Guests can view the home page but do not see create/comment/reaction forms.
+- Registered users can create posts with one or more categories.
+- Empty or whitespace-only posts are rejected with `400 Bad Request`.
+- Empty comments are rejected with `400 Bad Request`.
+- Posts can be filtered by category, by current user's created posts, and by
+  current user's liked posts.
+- Post/comment reactions are stored as one reaction per user per target, so a
+  user cannot like and dislike the same post/comment at the same time.
+- Passwords are stored with bcrypt hashes.
+- The users table requires a stored password value.
+- `main.go` closes the database handle when the server exits.
 
-0. **cookie age**
+## Remaining basic work
 
-1. **Use real session tokens instead of user IDs in cookies**  
-   In [handlers/auth.go](/home/curadaz/forum/handlers/auth.go:94), the cookie value is `strconv.Itoa(user.ID)`. That is easy to guess. Use a random session ID from `helpers/generator.go` and store/map it server-side.
+1. User-generated HTML is not escaped.
+   `handlers/render.go` writes post titles, post content, usernames, category
+   names, and comment content by concatenating strings. Use `html/template` or
+   `html.EscapeString` for user-controlled values.
 
-2. **Hash passwords before storing them**  
-   [database/users.go](/home/curadaz/forum/database/users.go:6) stores the raw password. Use `bcrypt` before insert and compare with `bcrypt.CompareHashAndPassword` during login.
+2. Foreign keys are missing.
+   `database/schema.sql` stores `author_id`, `post_id`, `category_id`,
+   `comment_id`, and `user_id` references without `FOREIGN KEY` constraints.
+   Adding them prevents orphan posts, comments, categories, sessions, and
+   reactions.
 
-3. **Use `html/template` instead of string-building HTML**  
-   [handlers/home.go](/home/curadaz/forum/handlers/home.go:53) writes post title/content directly into HTML. That can allow HTML/script injection. Templates escape output automatically.
+## Useful cleanup
 
-4. **Move repeated session-cookie parsing into one helper module**  
-   `HomeHandler` and `CreatePostHandler` both read the `session` cookie, parse it, and return similar errors. A small helper like `CurrentUser(db, r)` would improve locality and reduce repeated auth logic.
-
-5. **Fix post query efficiency**  
-   [handlers/home.go](/home/curadaz/forum/handlers/home.go:44) fetches one user per post. Better: make `GetAllPosts` return posts with author username using a SQL `JOIN`.
-
-6. **Check `rows.Err()` after the loop**  
-   In [database/posts.go](/home/curadaz/forum/database/posts.go:38), `rows.Err()` is checked inside the loop. Move it after the loop so scan iteration errors are handled correctly.
-
-7. **Add foreign keys to the schema**  
-   [database/schema.sql](/home/curadaz/forum/database/schema.sql:10) has `author_id`, `post_id`, etc., but no `FOREIGN KEY` constraints. Adding them prevents orphan posts/comments/reactions.
-
-8. **Set cookie security options**  
-   In [handlers/auth.go](/home/curadaz/forum/handlers/auth.go:94), add `HttpOnly`, `SameSite`, and eventually `Secure` when using HTTPS.
-
-9. **Add input validation before DB writes**  
-   `RegisterHandler` and `CreatePostHandler` should reject empty email, username, password, title, or content with `400 Bad Request`.
-
-10. **Close the database in `main`**  
-   [main.go](/home/curadaz/forum/main.go:11) opens the DB but never closes it. Add `defer db.Close()` after successful init.
+- Add tests for escaping rendered user content.
+- Consider a small session/current-user helper to reduce repeated cookie lookup
+  and session validation in handlers.
+- Consider query optimizations for rendering posts. `renderPosts` currently does
+  several per-post/per-comment lookups for authors, categories, comments, and
+  reaction counts. This is not an immediate audit blocker, but it is worth
+  improving after the basic gaps are closed.
