@@ -16,6 +16,8 @@ func main() {
 		return
 	}
 
+	defer db.Close()
+
 	err = database.DeleteExpiredSessions(db)
 	if err != nil {
 		fmt.Println(err)
