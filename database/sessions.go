@@ -62,6 +62,18 @@ func DeleteSession(db *sql.DB, sessionID string) error {
 	return nil
 }
 
+// DeleteSessionsByUserID removes all sessions for a user, which is useful after password changes.
+func DeleteSessionsByUserID(db *sql.DB, userID int) error {
+	query := "DELETE FROM sessions WHERE user_id = ?"
+
+	_, err := db.Exec(query, userID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // DeleteExpiredSessions removes stale sessions that can no longer authenticate requests.
 func DeleteExpiredSessions(db *sql.DB) error {
 
