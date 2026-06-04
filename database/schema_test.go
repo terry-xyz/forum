@@ -28,3 +28,25 @@ func TestSchemaExecutes(t *testing.T) {
 		t.Fatalf("schema did not execute: %v", err)
 	}
 }
+
+// TestUsersPasswordIsRequired verifies the schema rejects users without stored passwords.
+func TestUsersPasswordIsRequired(t *testing.T) {
+	db, err := sql.Open("sqlite3", t.TempDir()+"/forum.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	schema, err := os.ReadFile("schema.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(string(schema)); err != nil {
+		t.Fatalf("schema did not execute: %v", err)
+	}
+
+	_, err = db.Exec("INSERT INTO users (email, username) VALUES (?, ?)", "user@example.com", "user")
+	if err == nil {
+		t.Fatal("expected missing password insert to fail")
+	}
+}
