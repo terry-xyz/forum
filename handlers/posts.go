@@ -5,6 +5,7 @@ import (
 	"forum/database"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 // CreatePostHandler serves the post form and creates posts for the logged-in user.
@@ -75,8 +76,17 @@ func CreatePostHandler(db *sql.DB) http.HandlerFunc {
 				return
 			}
 			// Scalar fields come from the submitted form body.
-			title := r.FormValue("title")
-			content := r.FormValue("content")
+			title := strings.TrimSpace(r.FormValue("title"))
+			content := strings.TrimSpace(r.FormValue("content"))
+
+			if title == "" {
+				http.Error(w, "title cannot be empty", http.StatusBadRequest)
+				return
+			}
+			if content == "" {
+				http.Error(w, "content cannot be empty", http.StatusBadRequest)
+				return
+			}
 
 			// Convert the repeated checkbox values from strings into database IDs.
 			categoryIDStrs := r.Form["category_ids"]
