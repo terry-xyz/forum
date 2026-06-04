@@ -6,6 +6,8 @@ import (
 	"forum/database"
 	"forum/helpers"
 	"net/http"
+	"net/mail"
+	"strings"
 	"time"
 
 	"github.com/mattn/go-sqlite3"
@@ -38,9 +40,24 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 		if r.Method == http.MethodPost {
 			// FormValue parses form data on demand and returns an empty string
 			// when a field is absent.
-			email := r.FormValue("email")
-			username := r.FormValue("username")
-			password := r.FormValue("password")
+			email := strings.TrimSpace(r.FormValue("email"))
+			username := strings.TrimSpace(r.FormValue("username"))
+			password := strings.TrimSpace(r.FormValue("password"))
+
+			_, err := mail.ParseAddress(email)
+
+			if err != nil {
+				http.Error(w, "invalid email format", http.StatusBadRequest)
+				return
+			}
+			if username == "" {
+				http.Error(w, "username cannot be empty", http.StatusBadRequest)
+				return
+			}
+			if len(password) < 8 {
+				http.Error(w, "password must be at least 8 characters long", http.StatusBadRequest)
+				return
+			}
 
 			// Store only a bcrypt hash so a database leak does not expose raw passwords.
 			hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -103,8 +120,19 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 		if r.Method == http.MethodPost {
 			// Read the two fields the form submits; missing fields become empty
 			// strings and naturally fail the credential check.
-			email := r.FormValue("email")
-			password := r.FormValue("password")
+			email := strings.TrimSpace(r.FormValue("email"))
+			password := strings.TrimSpace(r.FormValue("password"))
+
+			_, err := mail.ParseAddress(email)
+
+			if err != nil {
+				http.Error(w, "invalid email format", http.StatusBadRequest)
+				return
+			}
+			if len(password) < 8 {
+				http.Error(w, "password must be at least 8 characters long", http.StatusBadRequest)
+				return
+			}
 
 			// Lookup by email first because email is the login identifier.
 			user, err := database.GetUserByEmail(db, email)
@@ -125,6 +153,12 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 			err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 			if err != nil {
 				http.Error(w, "invalid email or password", http.StatusUnauthorized)
+				return
+			}
+
+			err = database.DeleteSessionsByUserID(db, user.ID)
+			if err != nil {
+				http.Error(w, "unable to create session", http.StatusInternalServerError)
 				return
 			}
 
