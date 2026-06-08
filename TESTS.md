@@ -30,29 +30,24 @@ of scope.
   current user's liked posts.
 - Post/comment reactions are stored as one reaction per user per target, so a
   user cannot like and dislike the same post/comment at the same time.
+- User-generated post titles, post content, usernames, category names, and
+  comment content are rendered through file-backed `html/template` templates and
+  escaped in the feed.
 - Passwords are stored with bcrypt hashes.
 - The users table requires a stored password value.
+- Foreign keys prevent orphan posts, comments, category links, sessions, and
+  reactions when SQLite foreign-key enforcement is enabled.
 - `main.go` closes the database handle when the server exits.
 
 ## Remaining basic work
 
-1. User-generated HTML is not escaped.
-   `handlers/render.go` writes post titles, post content, usernames, category
-   names, and comment content by concatenating strings. Use `html/template` or
-   `html.EscapeString` for user-controlled values.
-
-2. Foreign keys are missing.
-   `database/schema.sql` stores `author_id`, `post_id`, `category_id`,
-   `comment_id`, and `user_id` references without `FOREIGN KEY` constraints.
-   Adding them prevents orphan posts, comments, categories, sessions, and
-   reactions.
+None for the basic forum audit items tracked here.
 
 ## Useful cleanup
 
-- Add tests for escaping rendered user content.
 - Consider a small session/current-user helper to reduce repeated cookie lookup
   and session validation in handlers.
-- Consider query optimizations for rendering posts. `renderPosts` currently does
+- Consider query optimizations for rendering posts. `buildRenderedPosts` currently does
   several per-post/per-comment lookups for authors, categories, comments, and
   reaction counts. This is not an immediate audit blocker, but it is worth
   improving after the basic gaps are closed.
