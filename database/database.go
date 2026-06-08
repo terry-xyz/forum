@@ -11,7 +11,7 @@ import (
 func InitDB() (*sql.DB, error) {
 	// sql.Open creates a database handle; it does not immediately guarantee
 	// that the file can be reached or that the driver can connect.
-	db, err := sql.Open("sqlite3", "forum.db")
+	db, err := sql.Open("sqlite3", "forum.db?_foreign_keys=on")
 	if err != nil {
 		return nil, err
 	}

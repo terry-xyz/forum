@@ -357,7 +357,7 @@ func openTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 
 	// Each test gets an isolated SQLite file under the test temp directory.
-	db, err := sql.Open("sqlite3", t.TempDir()+"/forum.db")
+	db, err := sql.Open("sqlite3", t.TempDir()+"/forum.db?_foreign_keys=on")
 	if err != nil {
 		t.Fatal(err)
 	}

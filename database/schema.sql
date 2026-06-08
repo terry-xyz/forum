@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS posts (
     author_id INTEGER NOT NULL,
     title TEXT NOT NULL,
     content TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS comments (
@@ -20,7 +21,9 @@ CREATE TABLE IF NOT EXISTS comments (
     author_id INTEGER NOT NULL,
     post_id INTEGER NOT NULL,
     content TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS post_reactions (
@@ -29,7 +32,9 @@ CREATE TABLE IF NOT EXISTS post_reactions (
     post_id INTEGER NOT NULL,
     reaction_type TEXT NOT NULL CHECK (reaction_type IN ('like', 'dislike')), -- 'like', 'dislike'
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (user_id, post_id)
+    UNIQUE (user_id, post_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS comment_reactions (
@@ -38,7 +43,9 @@ CREATE TABLE IF NOT EXISTS comment_reactions (
     comment_id INTEGER NOT NULL,
     reaction_type TEXT NOT NULL CHECK (reaction_type IN ('like', 'dislike')), -- 'like', 'dislike'
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (user_id, comment_id)
+    UNIQUE (user_id, comment_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS categories (
@@ -54,12 +61,15 @@ INSERT OR IGNORE INTO categories (name) VALUES ('Music');
 CREATE TABLE IF NOT EXISTS post_categories (
     post_id INTEGER NOT NULL,
     category_id INTEGER NOT NULL,
-    UNIQUE (post_id, category_id)
+    UNIQUE (post_id, category_id),
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL,
     expires_at TIMESTAMP NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
