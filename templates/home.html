@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Forum</title>
+</head>
+<body>
+	<nav>
+		<p><a href="/">All</a> {{range .Categories}}<a href="/?category_id={{.ID}}">{{.Name}}</a> {{end}}</p>
+		{{if .CurrentUser}}
+			<a href="/create-post">Create post</a>
+			<a href="/my-posts">My posts</a>
+			<a href="/liked-posts">Liked posts</a>
+			<a href="/logout">Logout</a>
+		{{else}}
+			<a href="/login">Login</a>
+			<a href="/register">Register</a>
+		{{end}}
+	</nav>
+	<hr>
+	<main>
+		{{if .EmptyMessage}}
+			<p>{{.EmptyMessage}}</p>
+		{{else}}
+			{{range .Posts}}
+				{{template "post" .}}
+			{{end}}
+		{{end}}
+	</main>
+</body>
+</html>
