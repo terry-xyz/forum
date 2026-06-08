@@ -34,6 +34,10 @@ func CreateCommentHandler(db *sql.DB) http.HandlerFunc {
 			http.Error(w, "invalid session", http.StatusUnauthorized)
 			return
 		}
+		if !validCSRFToken(db, r, cookie.Value) {
+			http.Error(w, "invalid csrf token", http.StatusForbidden)
+			return
+		}
 
 		// The form posts the owning post ID as a hidden field.
 		postIDStr := r.FormValue("post_id")
@@ -87,6 +91,10 @@ func DeleteCommentHandler(db *sql.DB) http.HandlerFunc {
 		}
 		if userID == 0 {
 			http.Error(w, "invalid session", http.StatusUnauthorized)
+			return
+		}
+		if !validCSRFToken(db, r, cookie.Value) {
+			http.Error(w, "invalid csrf token", http.StatusForbidden)
 			return
 		}
 

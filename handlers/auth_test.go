@@ -295,11 +295,53 @@ func TestLoginHandlerInvalidatesPreviousSessions(t *testing.T) {
 	}
 }
 
-// TestLogoutHandlerExpiresSessionCookie verifies logout clears browser session state.
-func TestLogoutHandlerExpiresSessionCookie(t *testing.T) {
+// TestLogoutHandlerRejectsGET verifies logout cannot be triggered by top-level navigation.
+func TestLogoutHandlerRejectsGET(t *testing.T) {
 	db := openTestDB(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/logout", nil)
+	w := httptest.NewRecorder()
+
+	LogoutHandler(db)(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+// TestLogoutHandlerRejectsMissingCSRFToken verifies a session cookie alone cannot log out.
+func TestLogoutHandlerRejectsMissingCSRFToken(t *testing.T) {
+	db := openTestDB(t)
+	sessionID := createSessionForTest(t, db, "user@example.com")
+
+	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
+	req.AddCookie(&http.Cookie{Name: "session", Value: sessionID})
+	w := httptest.NewRecorder()
+
+	LogoutHandler(db)(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
+	}
+	userID, err := database.GetUserIDBySessionID(db, sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if userID == 0 {
+		t.Fatal("session was deleted without a csrf token")
+	}
+}
+
+// TestLogoutHandlerExpiresSessionCookie verifies logout clears browser session state.
+func TestLogoutHandlerExpiresSessionCookie(t *testing.T) {
+	db := openTestDB(t)
+	sessionID := createSessionForTest(t, db, "user@example.com")
+	csrfToken := csrfTokenForTest(t, db, sessionID)
+
+	form := url.Values{"csrf_token": {csrfToken}}
+	req := httptest.NewRequest(http.MethodPost, "/logout", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "session", Value: sessionID})
 	w := httptest.NewRecorder()
 
 	LogoutHandler(db)(w, req)
@@ -336,8 +378,11 @@ func TestLogoutHandlerExpiresSessionCookie(t *testing.T) {
 func TestLogoutHandlerDeletesServerSession(t *testing.T) {
 	db := openTestDB(t)
 	sessionID := createSessionForTest(t, db, "user@example.com")
+	csrfToken := csrfTokenForTest(t, db, sessionID)
 
-	req := httptest.NewRequest(http.MethodGet, "/logout", nil)
+	form := url.Values{"csrf_token": {csrfToken}}
+	req := httptest.NewRequest(http.MethodPost, "/logout", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: "session", Value: sessionID})
 	w := httptest.NewRecorder()
 
@@ -414,9 +459,24 @@ func createSessionForUserID(t *testing.T, db *sql.DB, sessionID string, userID i
 	t.Helper()
 
 	expiresAt := time.Now().Add(time.Hour)
-	if err := database.CreateSession(db, sessionID, userID, expiresAt); err != nil {
+	if err := database.CreateSession(db, sessionID, userID, "csrf-"+sessionID, expiresAt); err != nil {
 		t.Fatal(err)
 	}
 
 	return sessionID
+}
+
+// csrfTokenForTest returns the server-side token tied to a test session.
+func csrfTokenForTest(t *testing.T, db *sql.DB, sessionID string) string {
+	t.Helper()
+
+	token, err := database.GetCSRFTokenBySessionID(db, sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token == "" {
+		t.Fatal("csrf token is empty")
+	}
+
+	return token
 }

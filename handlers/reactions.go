@@ -35,6 +35,10 @@ func ReactPostHandler(db *sql.DB) http.HandlerFunc {
 			http.Error(w, "invalid session", http.StatusUnauthorized)
 			return
 		}
+		if !validCSRFToken(db, r, cookie.Value) {
+			http.Error(w, "invalid csrf token", http.StatusForbidden)
+			return
+		}
 
 		// The post ID arrives as a hidden form field.
 		postIDStr := r.FormValue("post_id")
@@ -88,6 +92,10 @@ func ReactCommentHandler(db *sql.DB) http.HandlerFunc {
 		}
 		if userID == 0 {
 			http.Error(w, "invalid session", http.StatusUnauthorized)
+			return
+		}
+		if !validCSRFToken(db, r, cookie.Value) {
+			http.Error(w, "invalid csrf token", http.StatusForbidden)
 			return
 		}
 

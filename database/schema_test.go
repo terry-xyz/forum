@@ -99,8 +99,8 @@ func TestSchemaRejectsOrphanedRelationships(t *testing.T) {
 		},
 		{
 			name:  "session user",
-			query: "INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
-			args:  []any{"orphaned-session", 999},
+			query: "INSERT INTO sessions (id, user_id, csrf_token, expires_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
+			args:  []any{"orphaned-session", 999, "csrf-token"},
 		},
 	}
 
@@ -110,5 +110,44 @@ func TestSchemaRejectsOrphanedRelationships(t *testing.T) {
 				t.Fatal("expected insert with missing parent row to fail")
 			}
 		})
+	}
+}
+
+// TestEnsureSessionCSRFColumnUpgradesLegacyTable verifies existing databases can accept new sessions.
+func TestEnsureSessionCSRFColumnUpgradesLegacyTable(t *testing.T) {
+	db, err := sql.Open("sqlite3", t.TempDir()+"/forum.db?_foreign_keys=on")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`
+		CREATE TABLE users (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			email TEXT NOT NULL UNIQUE,
+			username TEXT NOT NULL UNIQUE,
+			password TEXT NOT NULL
+		);
+		CREATE TABLE sessions (
+			id TEXT PRIMARY KEY,
+			user_id INTEGER NOT NULL,
+			expires_at TIMESTAMP NOT NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		);
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ensureSessionCSRFColumn(db); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := db.Exec("INSERT INTO users (email, username, password) VALUES (?, ?, ?)", "user@example.com", "user", "password"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("INSERT INTO sessions (id, user_id, csrf_token, expires_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)", "session", 1, "csrf"); err != nil {
+		t.Fatalf("legacy sessions table did not accept csrf_token after migration: %v", err)
 	}
 }

@@ -167,10 +167,15 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 				http.Error(w, "unable to create session", http.StatusInternalServerError)
 				return
 			}
+			csrfToken, err := helpers.GenerateSessionID()
+			if err != nil {
+				http.Error(w, "unable to create session", http.StatusInternalServerError)
+				return
+			}
 
 			expiresAt := time.Now().Add(time.Second * sessionCookieMaxAge)
 
-			err = database.CreateSession(db, sessionID, user.ID, expiresAt)
+			err = database.CreateSession(db, sessionID, user.ID, csrfToken, expiresAt)
 			if err != nil {
 				http.Error(w, "unable to create session", http.StatusInternalServerError)
 				return
@@ -200,12 +205,25 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 func LogoutHandler(db *sql.DB) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
 		cookie, err := r.Cookie("session")
-		if err == nil {
-			if err := database.DeleteSession(db, cookie.Value); err != nil {
-				http.Error(w, "unable to log out", http.StatusInternalServerError)
-				return
-			}
+		if err != nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		if !validCSRFToken(db, r, cookie.Value) {
+			http.Error(w, "invalid csrf token", http.StatusForbidden)
+			return
+		}
+
+		if err := database.DeleteSession(db, cookie.Value); err != nil {
+			http.Error(w, "unable to log out", http.StatusInternalServerError)
+			return
 		}
 
 		// Reissue the same cookie name with MaxAge -1 and an old Expires value

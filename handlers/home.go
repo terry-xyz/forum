@@ -12,16 +12,17 @@ import (
 type homeView struct {
 	Categories   []models.Category
 	CurrentUser  *models.User
+	CSRFToken    string
 	Posts        []renderedPost
 	EmptyMessage string
 }
 
-func renderHomePage(w http.ResponseWriter, db *sql.DB, posts []models.Post, currentUser *models.User, emptyMessage string) error {
+func renderHomePage(w http.ResponseWriter, db *sql.DB, posts []models.Post, currentUser *models.User, emptyMessage string, csrfToken string) error {
 	allCategories, err := database.GetAllCategories(db)
 	if err != nil {
 		return err
 	}
-	renderedPosts, err := buildRenderedPosts(db, posts, currentUser)
+	renderedPosts, err := buildRenderedPosts(db, posts, currentUser, csrfToken)
 	if err != nil {
 		return err
 	}
@@ -30,6 +31,7 @@ func renderHomePage(w http.ResponseWriter, db *sql.DB, posts []models.Post, curr
 	return templates.Home.Execute(w, homeView{
 		Categories:   allCategories,
 		CurrentUser:  currentUser,
+		CSRFToken:    csrfToken,
 		Posts:        renderedPosts,
 		EmptyMessage: emptyMessage,
 	})
@@ -45,6 +47,7 @@ func HomeHandler(db *sql.DB) http.HandlerFunc {
 		if r.Method == http.MethodGet {
 
 			var currentUser *models.User
+			csrfToken := ""
 
 			// Guests can view the feed, so a missing or invalid session simply
 			// leaves currentUser nil and hides authenticated actions.
@@ -57,6 +60,11 @@ func HomeHandler(db *sql.DB) http.HandlerFunc {
 				}
 				if userID != 0 {
 					currentUser, err = database.GetUserByID(db, userID)
+					if err != nil {
+						http.Error(w, "internal error", http.StatusInternalServerError)
+						return
+					}
+					csrfToken, err = database.GetCSRFTokenBySessionID(db, cookie.Value)
 					if err != nil {
 						http.Error(w, "internal error", http.StatusInternalServerError)
 						return
@@ -92,7 +100,7 @@ func HomeHandler(db *sql.DB) http.HandlerFunc {
 			}
 
 			// Render the full page from the file-backed template.
-			if err := renderHomePage(w, db, posts, currentUser, ""); err != nil {
+			if err := renderHomePage(w, db, posts, currentUser, "", csrfToken); err != nil {
 				http.Error(w, "failed to render home page", http.StatusInternalServerError)
 				return
 			}

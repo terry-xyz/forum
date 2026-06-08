@@ -12,7 +12,10 @@
 			<a href="/create-post">Create post</a>
 			<a href="/my-posts">My posts</a>
 			<a href="/liked-posts">Liked posts</a>
-			<a href="/logout">Logout</a>
+			<form method="POST" action="/logout">
+				<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+				<button type="submit">Logout</button>
+			</form>
 		{{else}}
 			<a href="/login">Login</a>
 			<a href="/register">Register</a>

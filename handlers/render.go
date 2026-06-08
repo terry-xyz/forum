@@ -17,6 +17,7 @@ type renderedPost struct {
 	Dislikes        int
 	IsAuthenticated bool
 	CanDelete       bool
+	CSRFToken       string
 	Comments        []renderedComment
 }
 
@@ -28,10 +29,11 @@ type renderedComment struct {
 	Dislikes        int
 	IsAuthenticated bool
 	CanDelete       bool
+	CSRFToken       string
 }
 
 // buildRenderedPosts resolves feed data into the view model used by the home template.
-func buildRenderedPosts(db *sql.DB, posts []models.Post, currentUser *models.User) ([]renderedPost, error) {
+func buildRenderedPosts(db *sql.DB, posts []models.Post, currentUser *models.User, csrfToken string) ([]renderedPost, error) {
 	renderedPosts := make([]renderedPost, 0, len(posts))
 
 	for _, p := range posts {
@@ -93,6 +95,7 @@ func buildRenderedPosts(db *sql.DB, posts []models.Post, currentUser *models.Use
 				Dislikes:        commentDislikes,
 				IsAuthenticated: currentUser != nil,
 				CanDelete:       currentUser != nil && currentUser.ID == c.AuthorID,
+				CSRFToken:       csrfToken,
 			})
 		}
 
@@ -106,6 +109,7 @@ func buildRenderedPosts(db *sql.DB, posts []models.Post, currentUser *models.Use
 			Dislikes:        postDislikes,
 			IsAuthenticated: currentUser != nil,
 			CanDelete:       currentUser != nil && currentUser.ID == p.AuthorID,
+			CSRFToken:       csrfToken,
 			Comments:        renderedComments,
 		})
 	}

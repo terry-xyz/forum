@@ -26,12 +26,14 @@ func TestCreatePostHandlerCreatesPost(t *testing.T) {
 		t.Fatal("user was not created")
 	}
 	sessionID := createSessionForUserID(t, db, "create-post-session", user.ID)
+	csrfToken := csrfTokenForTest(t, db, sessionID)
 
 	// Build a form submission matching the create-post endpoint.
 	form := url.Values{
 		"title":        {"First post"},
 		"content":      {"Hello forum"},
 		"category_ids": {"1"},
+		"csrf_token":   {csrfToken},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/create-post", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -97,11 +99,13 @@ func TestCreatePostHandlerRejectsWhitespacePostFields(t *testing.T) {
 				t.Fatal("user was not created")
 			}
 			sessionID := createSessionForUserID(t, db, "create-post-session", user.ID)
+			csrfToken := csrfTokenForTest(t, db, sessionID)
 
 			form := url.Values{
 				"title":        {tt.title},
 				"content":      {tt.content},
 				"category_ids": {"1"},
+				"csrf_token":   {csrfToken},
 			}
 			req := httptest.NewRequest(http.MethodPost, "/create-post", strings.NewReader(form.Encode()))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -125,6 +129,87 @@ func TestCreatePostHandlerRejectsWhitespacePostFields(t *testing.T) {
 				t.Fatalf("posts = %d, want 0", len(posts))
 			}
 		})
+	}
+}
+
+// TestCreatePostHandlerRejectsMissingCSRFToken verifies a valid session alone is not enough for writes.
+func TestCreatePostHandlerRejectsMissingCSRFToken(t *testing.T) {
+	db := openTestDB(t)
+
+	if err := database.CreateUser(db, "author@example.com", "author", "password"); err != nil {
+		t.Fatal(err)
+	}
+	user, err := database.GetUserByEmail(db, "author@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user == nil {
+		t.Fatal("user was not created")
+	}
+	sessionID := createSessionForUserID(t, db, "create-post-session", user.ID)
+
+	form := url.Values{
+		"title":        {"CSRF post"},
+		"content":      {"This should not be created"},
+		"category_ids": {"1"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/create-post", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "session", Value: sessionID})
+	w := httptest.NewRecorder()
+
+	CreatePostHandler(db)(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
+	}
+	posts, err := database.GetAllPosts(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(posts) != 0 {
+		t.Fatalf("posts = %d, want 0", len(posts))
+	}
+}
+
+// TestCreatePostHandlerRejectsInvalidCSRFToken verifies forged tokens cannot authorize writes.
+func TestCreatePostHandlerRejectsInvalidCSRFToken(t *testing.T) {
+	db := openTestDB(t)
+
+	if err := database.CreateUser(db, "author@example.com", "author", "password"); err != nil {
+		t.Fatal(err)
+	}
+	user, err := database.GetUserByEmail(db, "author@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user == nil {
+		t.Fatal("user was not created")
+	}
+	sessionID := createSessionForUserID(t, db, "create-post-session", user.ID)
+
+	form := url.Values{
+		"title":        {"CSRF post"},
+		"content":      {"This should not be created"},
+		"category_ids": {"1"},
+		"csrf_token":   {"forged-token"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/create-post", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "session", Value: sessionID})
+	w := httptest.NewRecorder()
+
+	CreatePostHandler(db)(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
+	}
+	posts, err := database.GetAllPosts(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(posts) != 0 {
+		t.Fatalf("posts = %d, want 0", len(posts))
 	}
 }
 

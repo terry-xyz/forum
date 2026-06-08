@@ -35,7 +35,39 @@ func InitDB() (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := ensureSessionCSRFColumn(db); err != nil {
+		return nil, err
+	}
 
 	// Return the shared handle for handlers and database helper functions.
 	return db, nil
+}
+
+func ensureSessionCSRFColumn(db *sql.DB) error {
+	rows, err := db.Query("PRAGMA table_info(sessions)")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var columnType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &pk); err != nil {
+			return err
+		}
+		if name == "csrf_token" {
+			return rows.Err()
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	_, err = db.Exec("ALTER TABLE sessions ADD COLUMN csrf_token TEXT NOT NULL DEFAULT ''")
+	return err
 }

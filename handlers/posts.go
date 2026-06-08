@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"forum/database"
+	"html"
 	"net/http"
 	"strconv"
 	"strings"
@@ -30,6 +31,15 @@ func CreatePostHandler(db *sql.DB) http.HandlerFunc {
 			http.Error(w, "invalid session", http.StatusUnauthorized)
 			return
 		}
+		csrfToken, err := database.GetCSRFTokenBySessionID(db, cookie.Value)
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if csrfToken == "" {
+			http.Error(w, "invalid session", http.StatusUnauthorized)
+			return
+		}
 
 		// GET renders the post creation form and its category checkboxes.
 		if r.Method == http.MethodGet {
@@ -45,6 +55,7 @@ func CreatePostHandler(db *sql.DB) http.HandlerFunc {
 			w.Header().Set("Content-Type", "text/html")
 			w.Write([]byte(`
 			<form method="POST" action="/create-post">
+				<input type="hidden" name="csrf_token" value="` + html.EscapeString(csrfToken) + `">
 				Title: <input name="title"><br>
 				Content:
 				<textarea name="content"></textarea><br>
@@ -68,6 +79,11 @@ func CreatePostHandler(db *sql.DB) http.HandlerFunc {
 
 		// POST validates submitted data, creates the post, and links categories.
 		if r.Method == http.MethodPost {
+			if !validCSRFToken(db, r, cookie.Value) {
+				http.Error(w, "invalid csrf token", http.StatusForbidden)
+				return
+			}
+
 			// ParseForm is required here because category_ids is read from r.Form
 			// as a repeated value.
 			err := r.ParseForm()
@@ -183,7 +199,17 @@ func MyPostsHandler(db *sql.DB) http.HandlerFunc {
 			// Empty results are valid for new users, so render an empty-state message.
 			emptyMessage = "You have not created any posts yet."
 		}
-		if err := renderHomePage(w, db, posts, currentUser, emptyMessage); err != nil {
+		csrfToken, err := database.GetCSRFTokenBySessionID(db, cookie.Value)
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if csrfToken == "" {
+			http.Error(w, "invalid session", http.StatusUnauthorized)
+			return
+		}
+
+		if err := renderHomePage(w, db, posts, currentUser, emptyMessage, csrfToken); err != nil {
 			http.Error(w, "failed to render posts", http.StatusInternalServerError)
 			return
 		}
@@ -241,7 +267,17 @@ func LikedPostsHandler(db *sql.DB) http.HandlerFunc {
 			// Empty results are valid when the user has not liked anything yet.
 			emptyMessage = "You don't have any liked posts yet."
 		}
-		if err := renderHomePage(w, db, posts, currentUser, emptyMessage); err != nil {
+		csrfToken, err := database.GetCSRFTokenBySessionID(db, cookie.Value)
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if csrfToken == "" {
+			http.Error(w, "invalid session", http.StatusUnauthorized)
+			return
+		}
+
+		if err := renderHomePage(w, db, posts, currentUser, emptyMessage, csrfToken); err != nil {
 			http.Error(w, "failed to render posts", http.StatusInternalServerError)
 			return
 		}
@@ -274,6 +310,10 @@ func DeletePostHandler(db *sql.DB) http.HandlerFunc {
 		}
 		if userID == 0 {
 			http.Error(w, "invalid session", http.StatusUnauthorized)
+			return
+		}
+		if !validCSRFToken(db, r, cookie.Value) {
+			http.Error(w, "invalid csrf token", http.StatusForbidden)
 			return
 		}
 

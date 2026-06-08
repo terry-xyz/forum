@@ -6,17 +6,20 @@
 <p>Likes: {{.Likes}} | Dislikes: {{.Dislikes}}</p>
 {{if .IsAuthenticated}}
 	<form method="POST" action="/post-reaction">
+		<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
 		<input type="hidden" name="post_id" value="{{.ID}}">
 		<input type="hidden" name="reaction_type" value="like">
 		<button type="submit">Like</button>
 	</form>
 
 	<form method="POST" action="/post-reaction">
+		<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
 		<input type="hidden" name="post_id" value="{{.ID}}">
 		<input type="hidden" name="reaction_type" value="dislike">
 		<button type="submit">Dislike</button>
 	</form>
 	<form method="POST" action="/comment">
+		<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
 		<input type="hidden" name="post_id" value="{{.ID}}">
 		<textarea name="content"></textarea>
 		<button type="submit">Comment</button>
@@ -24,6 +27,7 @@
 {{end}}
 {{if .CanDelete}}
 	<form method="POST" action="/delete-post">
+		<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
 		<input type="hidden" name="post_id" value="{{.ID}}">
 		<button type="submit">Delete post</button>
 	</form>
