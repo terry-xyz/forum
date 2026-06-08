@@ -5,151 +5,110 @@ import (
 	"errors"
 	"forum/database"
 	"forum/models"
-	"net/http"
-	"strconv"
-	"strings"
 )
 
-// renderPosts writes feed markup and shows action forms only when currentUser is not nil.
-func renderPosts(w http.ResponseWriter, db *sql.DB, posts []models.Post, currentUser *models.User) error {
+type renderedPost struct {
+	ID              int
+	Title           string
+	Content         string
+	AuthorName      string
+	Categories      []models.Category
+	Likes           int
+	Dislikes        int
+	IsAuthenticated bool
+	CanDelete       bool
+	Comments        []renderedComment
+}
+
+type renderedComment struct {
+	ID              int
+	AuthorName      string
+	Content         string
+	Likes           int
+	Dislikes        int
+	IsAuthenticated bool
+	CanDelete       bool
+}
+
+// buildRenderedPosts resolves feed data into the view model used by the home template.
+func buildRenderedPosts(db *sql.DB, posts []models.Post, currentUser *models.User) ([]renderedPost, error) {
+	renderedPosts := make([]renderedPost, 0, len(posts))
+
 	for _, p := range posts {
 		// Resolve author IDs while rendering so the UI can show usernames.
 		author, err := database.GetUserByID(db, p.AuthorID)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if author == nil {
-			return errors.New("post author not found")
+			return nil, errors.New("post author not found")
 		}
 
 		// Reaction totals are stored as separate rows and counted per type.
 		postLikes, err := database.CountPostReactions(db, p.ID, "like")
 		if err != nil {
-			return err
+			return nil, err
 		}
 		postDislikes, err := database.CountPostReactions(db, p.ID, "dislike")
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// Categories are rendered as inline labels under each post.
 		categories, err := database.GetCategoriesByPostID(db, p.ID)
 		if err != nil {
-			return err
-		}
-		var categoryHTML strings.Builder
-		for _, c := range categories {
-			categoryHTML.WriteString("<span>" + c.Name + "</span> ")
+			return nil, err
 		}
 
 		// Load comments and their authors before writing comment markup so
 		// any database error can stop the response consistently.
 		comments, err := database.GetCommentsByPostID(db, p.ID)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		commentAuthors := make([]string, 0, len(comments))
+		renderedComments := make([]renderedComment, 0, len(comments))
 		for _, c := range comments {
 			// Each comment stores only author_id, so look up the display name.
 			commentAuthor, err := database.GetUserByID(db, c.AuthorID)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if commentAuthor == nil {
-				return errors.New("comment author not found")
+				return nil, errors.New("comment author not found")
 			}
-			commentAuthors = append(commentAuthors, commentAuthor.Username)
-		}
-
-		// Write public post details first so guests and logged-in users share
-		// the same read-only feed markup.
-		w.Write([]byte(
-			"<h3>" + p.Title + "</h3>" +
-				"<p>" + p.Content + "</p>" +
-				"<small>Author: " + author.Username + "</small>" +
-				"<p>Categories: " + categoryHTML.String() + "</p>" +
-				"<p>Likes: " + strconv.Itoa(postLikes) + " | Dislikes: " + strconv.Itoa(postDislikes) + "</p>",
-		))
-		if currentUser != nil {
-			// Only logged-in users can submit reactions or comments.
-			w.Write([]byte(
-				`<form method="POST" action="/post-reaction">
-					<input type="hidden" name="post_id" value="` + strconv.Itoa(p.ID) + `">
-					<input type="hidden" name="reaction_type" value="like">
-					<button type="submit">Like</button>
-				</form>
-
-				<form method="POST" action="/post-reaction">
-					<input type="hidden" name="post_id" value="` + strconv.Itoa(p.ID) + `">
-					<input type="hidden" name="reaction_type" value="dislike">
-					<button type="submit">Dislike</button>
-				</form>` +
-					`<form method="POST" action="/comment">
-					<input type="hidden" name="post_id" value="` + strconv.Itoa(p.ID) + `">
-					<textarea name="content"></textarea>
-					<button type="submit">Comment</button>
-				</form>`,
-			))
-		}
-		if currentUser != nil && currentUser.ID == p.AuthorID {
-			// Show the delete form only to the post author; the handler repeats
-			// this ownership check before deleting.
-			w.Write([]byte(`
-				<form method="POST" action="/delete-post">
-					<input type="hidden" name="post_id" value="` + strconv.Itoa(p.ID) + `">
-					<button type="submit">Delete post</button>
-				</form>
-			`))
-		}
-		// Render comments below their owning post, preserving the same index
-		// into commentAuthors that was built during validation.
-		for i, c := range comments {
-			// Counts are fetched per comment so each comment has independent
-			// like/dislike totals.
 			commentLikes, err := database.CountCommentReactions(db, c.ID, "like")
 			if err != nil {
-				return err
+				return nil, err
 			}
 			commentDislikes, err := database.CountCommentReactions(db, c.ID, "dislike")
 			if err != nil {
-				return err
-			}
-			w.Write([]byte(
-				"<h5>" + commentAuthors[i] + "</h5>" +
-					"<p>" + c.Content + "</p>" +
-					"<p>Likes: " + strconv.Itoa(commentLikes) + " | Dislikes: " + strconv.Itoa(commentDislikes) + "</p>",
-			))
-
-			if currentUser != nil {
-				// Comment reactions follow the same auth rule as post reactions.
-				w.Write([]byte(
-					`<form method="POST" action="/comment-reaction">
-						<input type="hidden" name="comment_id" value="` + strconv.Itoa(c.ID) + `">
-						<input type="hidden" name="reaction_type" value="like">
-						<button type="submit">Like</button>
-					</form>
-
-					<form method="POST" action="/comment-reaction">
-						<input type="hidden" name="comment_id" value="` + strconv.Itoa(c.ID) + `">
-						<input type="hidden" name="reaction_type" value="dislike">
-						<button type="submit">Dislike</button>
-					</form>`,
-				))
+				return nil, err
 			}
 
-			if currentUser != nil && currentUser.ID == c.AuthorID {
-				// Show the delete form only beside comments owned by the current user.
-				w.Write([]byte(`
-					<form method="POST" action="/delete-comment">
-						<input type="hidden" name="comment_id" value="` + strconv.Itoa(c.ID) + `">
-						<button type="submit">Delete comment</button>
-					</form>
-				`))
-			}
+			renderedComments = append(renderedComments, renderedComment{
+				ID:              c.ID,
+				AuthorName:      commentAuthor.Username,
+				Content:         c.Content,
+				Likes:           commentLikes,
+				Dislikes:        commentDislikes,
+				IsAuthenticated: currentUser != nil,
+				CanDelete:       currentUser != nil && currentUser.ID == c.AuthorID,
+			})
 		}
-		// Separate posts visually in the simple HTML output.
-		w.Write([]byte("<hr>"))
+
+		renderedPosts = append(renderedPosts, renderedPost{
+			ID:              p.ID,
+			Title:           p.Title,
+			Content:         p.Content,
+			AuthorName:      author.Username,
+			Categories:      categories,
+			Likes:           postLikes,
+			Dislikes:        postDislikes,
+			IsAuthenticated: currentUser != nil,
+			CanDelete:       currentUser != nil && currentUser.ID == p.AuthorID,
+			Comments:        renderedComments,
+		})
 	}
 
-	return nil
+	return renderedPosts, nil
 }

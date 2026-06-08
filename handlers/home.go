@@ -2,12 +2,38 @@ package handlers
 
 import (
 	"database/sql"
-	"fmt"
 	"forum/database"
 	"forum/models"
+	"forum/templates"
 	"net/http"
 	"strconv"
 )
+
+type homeView struct {
+	Categories   []models.Category
+	CurrentUser  *models.User
+	Posts        []renderedPost
+	EmptyMessage string
+}
+
+func renderHomePage(w http.ResponseWriter, db *sql.DB, posts []models.Post, currentUser *models.User, emptyMessage string) error {
+	allCategories, err := database.GetAllCategories(db)
+	if err != nil {
+		return err
+	}
+	renderedPosts, err := buildRenderedPosts(db, posts, currentUser)
+	if err != nil {
+		return err
+	}
+
+	w.Header().Set("Content-Type", "text/html")
+	return templates.Home.Execute(w, homeView{
+		Categories:   allCategories,
+		CurrentUser:  currentUser,
+		Posts:        renderedPosts,
+		EmptyMessage: emptyMessage,
+	})
+}
 
 // HomeHandler renders the forum home page for guests and adds user actions when a session is valid.
 func HomeHandler(db *sql.DB) http.HandlerFunc {
@@ -65,44 +91,9 @@ func HomeHandler(db *sql.DB) http.HandlerFunc {
 				}
 			}
 
-			// All response bodies from this handler are hand-written HTML.
-			w.Header().Set("Content-Type", "text/html")
-
-			// Load category filters after post selection so the filter bar always
-			// contains every available category.
-			allCategories, err := database.GetAllCategories(db)
-			if err != nil {
-				http.Error(w, "failed to load category filters", http.StatusInternalServerError)
-				return
-			}
-			// Render a simple filter bar with an "All" link plus one link per category.
-			w.Write([]byte(`<p><a href="/">All</a> `))
-			for _, c := range allCategories {
-				w.Write([]byte(
-					`<a href="/?category_id=` + strconv.Itoa(c.ID) + `">` + c.Name + `</a> `,
-				))
-			}
-			w.Write([]byte(`</p><hr>`))
-
-			if currentUser != nil {
-				w.Write([]byte(`
-					<a href="/create-post">Create post</a>
-					<a href="/my-posts">My posts</a>
-					<a href="/liked-posts">Liked posts</a>
-					<a href="/logout">Logout</a>
-				`))
-			} else {
-				w.Write([]byte(`
-					<a href="/login">Login</a>
-					<a href="/register">Register</a>
-				`))
-			}
-
-			// Render each post with its author, categories, reactions, and comments.
-			err = renderPosts(w, db, posts, currentUser)
-			if err != nil {
-				fmt.Println("renderPosts error:", err)
-				http.Error(w, "failed to render posts", http.StatusInternalServerError)
+			// Render the full page from the file-backed template.
+			if err := renderHomePage(w, db, posts, currentUser, ""); err != nil {
+				http.Error(w, "failed to render home page", http.StatusInternalServerError)
 				return
 			}
 

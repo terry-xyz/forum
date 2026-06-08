@@ -168,30 +168,24 @@ func MyPostsHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		w.Header().Set("Content-Type", "text/html")
+		currentUser, err := database.GetUserByID(db, userID)
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if currentUser == nil {
+			http.Error(w, "invalid session", http.StatusUnauthorized)
+			return
+		}
+
+		emptyMessage := ""
 		if len(posts) == 0 {
 			// Empty results are valid for new users, so render an empty-state message.
-			w.Write([]byte("<p>You have not created any posts yet.</p>"))
+			emptyMessage = "You have not created any posts yet."
+		}
+		if err := renderHomePage(w, db, posts, currentUser, emptyMessage); err != nil {
+			http.Error(w, "failed to render posts", http.StatusInternalServerError)
 			return
-		} else {
-			// renderPosts needs the current user to decide whether reaction and
-			// comment forms should be shown.
-			currentUser, err := database.GetUserByID(db, userID)
-			if err != nil {
-				http.Error(w, "internal server error", http.StatusInternalServerError)
-				return
-			}
-			if currentUser == nil {
-				http.Error(w, "invalid session", http.StatusUnauthorized)
-				return
-			}
-
-			// Reuse the feed renderer so reaction and comment markup stays identical.
-			err = renderPosts(w, db, posts, currentUser)
-			if err != nil {
-				http.Error(w, "failed to render posts", http.StatusInternalServerError)
-				return
-			}
 		}
 	}
 }
@@ -232,30 +226,24 @@ func LikedPostsHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		w.Header().Set("Content-Type", "text/html")
+		currentUser, err := database.GetUserByID(db, userID)
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if currentUser == nil {
+			http.Error(w, "invalid session", http.StatusUnauthorized)
+			return
+		}
+
+		emptyMessage := ""
 		if len(posts) == 0 {
 			// Empty results are valid when the user has not liked anything yet.
-			w.Write([]byte("<p>You don't have any liked posts yet.</p>"))
+			emptyMessage = "You don't have any liked posts yet."
+		}
+		if err := renderHomePage(w, db, posts, currentUser, emptyMessage); err != nil {
+			http.Error(w, "failed to render posts", http.StatusInternalServerError)
 			return
-		} else {
-			// renderPosts needs the current user to decide whether reaction and
-			// comment forms should be shown.
-			currentUser, err := database.GetUserByID(db, userID)
-			if err != nil {
-				http.Error(w, "internal server error", http.StatusInternalServerError)
-				return
-			}
-			if currentUser == nil {
-				http.Error(w, "invalid session", http.StatusUnauthorized)
-				return
-			}
-
-			// Reuse the feed renderer so reaction and comment markup stays identical.
-			err = renderPosts(w, db, posts, currentUser)
-			if err != nil {
-				http.Error(w, "failed to render posts", http.StatusInternalServerError)
-				return
-			}
 		}
 	}
 }

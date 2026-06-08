@@ -1,11 +1,15 @@
 package handlers
 
 import (
+	"database/sql"
 	"forum/database"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 // TestHomeHandlerRejectsUnsupportedMethod verifies HomeHandler is GET-only.
@@ -53,6 +57,29 @@ func TestHomeHandlerAllowsGuestSession(t *testing.T) {
 	}
 }
 
+// TestHomeHandlerRendersFullHTMLDocument verifies home output is a complete HTML page.
+func TestHomeHandlerRendersFullHTMLDocument(t *testing.T) {
+	db := openTestDB(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+
+	HomeHandler(db)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := strings.TrimSpace(w.Body.String())
+	if !strings.HasPrefix(body, "<!doctype html>") {
+		t.Fatalf("body = %q, want document to start with doctype", body)
+	}
+	for _, required := range []string{"<html", "<head>", "<title>Forum</title>", "<body>", "</body>", "</html>"} {
+		if !strings.Contains(body, required) {
+			t.Fatalf("body = %q, want full document marker %q", body, required)
+		}
+	}
+}
+
 // TestHomeHandlerRendersPostsWithAuthors verifies the happy-path home output.
 func TestHomeHandlerRendersPostsWithAuthors(t *testing.T) {
 	// Build a database with one author and one post.
@@ -96,9 +123,9 @@ func TestHomeHandlerRendersPostsWithAuthors(t *testing.T) {
 	}
 }
 
-// TestHomeHandlerReportsMissingCommentAuthor covers broken comment references.
-func TestHomeHandlerReportsMissingCommentAuthor(t *testing.T) {
-	// Build a valid post first so the only inconsistency is the comment author.
+// TestHomeHandlerRendersCommentsWithAuthors verifies comment content and authors are shown.
+func TestHomeHandlerRendersCommentsWithAuthors(t *testing.T) {
+	// Build a database with one author, one post, and one valid comment.
 	db := openTestDB(t)
 
 	if err := database.CreateUser(db, "author@example.com", "author", "password"); err != nil {
@@ -115,53 +142,165 @@ func TestHomeHandlerReportsMissingCommentAuthor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Insert a comment with an author_id that does not exist to simulate bad data.
-	if _, err := db.Exec("INSERT INTO comments (author_id, post_id, content) VALUES (?, ?, ?)", 999, postID, "orphaned comment"); err != nil {
+	if err := database.CreateComment(db, user.ID, postID, "first comment"); err != nil {
 		t.Fatal(err)
-	}
-	comments, err := database.GetCommentsByPostID(db, postID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(comments) != 1 {
-		t.Fatalf("comments = %d, want 1", len(comments))
-	}
-	if comments[0].AuthorID != 999 {
-		t.Fatalf("comment author id = %d, want 999", comments[0].AuthorID)
-	}
-	missingAuthor, err := database.GetUserByID(db, 999)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if missingAuthor != nil {
-		t.Fatalf("missing author = %#v, want nil", missingAuthor)
-	}
-	posts, err := database.GetAllPosts(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(posts) != 1 {
-		t.Fatalf("posts = %d, want 1", len(posts))
-	}
-	if posts[0].ID != postID {
-		t.Fatalf("post id = %d, want %d", posts[0].ID, postID)
 	}
 	sessionID := createSessionForUserID(t, db, "home-comment-session", user.ID)
 
-	// Authenticate as the valid user so rendering reaches the comments block.
+	// Authenticate as the valid user so rendering includes the comment action forms.
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.AddCookie(&http.Cookie{Name: "session", Value: sessionID})
 	w := httptest.NewRecorder()
 
 	HomeHandler(db)(w, req)
 
-	// The handler has already written the filter bar before this late render
-	// error, so httptest keeps the status at 200 while the body contains the
-	// generic client-facing message.
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body = %q", w.Code, http.StatusOK, w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), "failed to render posts") {
-		t.Fatalf("body = %q, want render failure message", w.Body.String())
+	body := w.Body.String()
+	if !strings.Contains(body, "<h5>author</h5>") {
+		t.Fatalf("body = %q, want rendered comment author", body)
 	}
+	if !strings.Contains(body, "<p>first comment</p>") {
+		t.Fatalf("body = %q, want rendered comment content", body)
+	}
+}
+
+// TestHomeHandlerEscapesRenderedUserContent verifies submitted HTML is shown as text.
+func TestHomeHandlerEscapesRenderedUserContent(t *testing.T) {
+	db := openTestDB(t)
+
+	if err := database.CreateUser(db, "author@example.com", `<b>author</b>`, "password"); err != nil {
+		t.Fatal(err)
+	}
+	user, err := database.GetUserByEmail(db, "author@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user == nil {
+		t.Fatal("user was not created")
+	}
+	postID, err := database.CreatePost(db, user.ID, `<script>title</script>`, `<img src=x onerror=alert(1)>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := db.Exec("INSERT INTO categories (name) VALUES (?)", `<em>category</em>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	categoryID, err := result.LastInsertId()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.AddCategoriesToPost(db, postID, []int{int(categoryID)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.CreateComment(db, user.ID, postID, `<strong>comment</strong>`); err != nil {
+		t.Fatal(err)
+	}
+	sessionID := createSessionForUserID(t, db, "home-escape-session", user.ID)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(&http.Cookie{Name: "session", Value: sessionID})
+	w := httptest.NewRecorder()
+
+	HomeHandler(db)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %q", w.Code, http.StatusOK, w.Body.String())
+	}
+	body := w.Body.String()
+	rawValues := []string{
+		`<script>title</script>`,
+		`<img src=x onerror=alert(1)>`,
+		`<b>author</b>`,
+		`<em>category</em>`,
+		`<strong>comment</strong>`,
+	}
+	for _, raw := range rawValues {
+		if strings.Contains(body, raw) {
+			t.Fatalf("body contains unescaped user content %q: %q", raw, body)
+		}
+	}
+	escapedValues := []string{
+		`&lt;script&gt;title&lt;/script&gt;`,
+		`&lt;img src=x onerror=alert(1)&gt;`,
+		`&lt;b&gt;author&lt;/b&gt;`,
+		`&lt;em&gt;category&lt;/em&gt;`,
+		`&lt;strong&gt;comment&lt;/strong&gt;`,
+	}
+	for _, escaped := range escapedValues {
+		if !strings.Contains(body, escaped) {
+			t.Fatalf("body = %q, want escaped content %q", body, escaped)
+		}
+	}
+}
+
+// TestHandlerTemplatesLiveInHTMLFiles verifies rendering markup is kept in template files.
+func TestHandlerTemplatesLiveInHTMLFiles(t *testing.T) {
+	for _, path := range []string{
+		"../templates/home.html",
+		"../templates/post.html",
+		"../templates/comment.html",
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("expected handler template file %s to exist: %v", path, err)
+		}
+	}
+}
+
+// TestRenderPostsReportsMissingCommentAuthor preserves the render error contract for bad data.
+func TestRenderPostsReportsMissingCommentAuthor(t *testing.T) {
+	db := openTestDBWithoutForeignKeys(t)
+
+	if err := database.CreateUser(db, "author@example.com", "author", "password"); err != nil {
+		t.Fatal(err)
+	}
+	user, err := database.GetUserByEmail(db, "author@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user == nil {
+		t.Fatal("user was not created")
+	}
+	postID, err := database.CreatePost(db, user.ID, "First post", "Hello forum")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("INSERT INTO comments (author_id, post_id, content) VALUES (?, ?, ?)", 999, postID, "orphaned comment"); err != nil {
+		t.Fatal(err)
+	}
+	posts, err := database.GetAllPosts(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = buildRenderedPosts(db, posts, user)
+
+	if err == nil {
+		t.Fatal("expected missing comment author to return an error")
+	}
+	if !strings.Contains(err.Error(), "comment author not found") {
+		t.Fatalf("error = %v, want missing comment author", err)
+	}
+}
+
+// openTestDBWithoutForeignKeys creates a malformed-data fixture for render error tests.
+func openTestDBWithoutForeignKeys(t *testing.T) *sql.DB {
+	t.Helper()
+
+	db, err := sql.Open("sqlite3", t.TempDir()+"/forum.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+
+	schema, err := os.ReadFile("../database/schema.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(string(schema)); err != nil {
+		t.Fatal(err)
+	}
+
+	return db
 }
