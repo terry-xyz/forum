@@ -221,6 +221,9 @@ func TestLoginHandlerSetsSessionCookie(t *testing.T) {
 	if cookie.SameSite != http.SameSiteLaxMode {
 		t.Fatalf("same site = %v, want %v", cookie.SameSite, http.SameSiteLaxMode)
 	}
+	if cookie.Secure {
+		t.Fatal("local http session cookie should not be Secure")
+	}
 	if cookie.MaxAge <= 0 {
 		t.Fatalf("max age = %d, want positive value", cookie.MaxAge)
 	}
@@ -235,6 +238,36 @@ func TestLoginHandlerSetsSessionCookie(t *testing.T) {
 	}
 	if userID != user.ID {
 		t.Fatalf("session user id = %d, want %d", userID, user.ID)
+	}
+}
+
+// TestLoginHandlerSetsSecureCookieForHTTPS verifies HTTPS logins get Secure cookies.
+func TestLoginHandlerSetsSecureCookieForHTTPS(t *testing.T) {
+	db := openTestDB(t)
+
+	if err := database.CreateUser(db, "user@example.com", "user", hashPasswordForTest(t, "password")); err != nil {
+		t.Fatal(err)
+	}
+
+	form := url.Values{
+		"email":    {"user@example.com"},
+		"password": {"password"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "https://example.com/login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+
+	LoginHandler(db)(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusSeeOther)
+	}
+	cookies := w.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("cookies = %d, want 1", len(cookies))
+	}
+	if !cookies[0].Secure {
+		t.Fatal("https session cookie should be Secure")
 	}
 }
 
@@ -371,6 +404,36 @@ func TestLogoutHandlerExpiresSessionCookie(t *testing.T) {
 	}
 	if cookie.SameSite != http.SameSiteLaxMode {
 		t.Fatalf("same site = %v, want %v", cookie.SameSite, http.SameSiteLaxMode)
+	}
+	if cookie.Secure {
+		t.Fatal("local http session-clearing cookie should not be Secure")
+	}
+}
+
+// TestLogoutHandlerSetsSecureCookieBehindHTTPSProxy verifies proxied HTTPS clears Secure cookies.
+func TestLogoutHandlerSetsSecureCookieBehindHTTPSProxy(t *testing.T) {
+	db := openTestDB(t)
+	sessionID := createSessionForTest(t, db, "user@example.com")
+	csrfToken := csrfTokenForTest(t, db, sessionID)
+
+	form := url.Values{"csrf_token": {csrfToken}}
+	req := httptest.NewRequest(http.MethodPost, "/logout", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.AddCookie(&http.Cookie{Name: "session", Value: sessionID})
+	w := httptest.NewRecorder()
+
+	LogoutHandler(db)(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusSeeOther)
+	}
+	cookies := w.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("cookies = %d, want 1", len(cookies))
+	}
+	if !cookies[0].Secure {
+		t.Fatal("proxied https session-clearing cookie should be Secure")
 	}
 }
 

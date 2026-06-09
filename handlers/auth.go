@@ -16,6 +16,31 @@ import (
 
 const sessionCookieMaxAge = 60 * 60 * 24
 
+func secureCookieForRequest(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+
+	for _, proto := range strings.Split(r.Header.Get("X-Forwarded-Proto"), ",") {
+		if strings.EqualFold(strings.TrimSpace(proto), "https") {
+			return true
+		}
+	}
+
+	for _, forwarded := range r.Header.Values("Forwarded") {
+		for _, part := range strings.Split(forwarded, ";") {
+			keyValue := strings.SplitN(strings.TrimSpace(part), "=", 2)
+			if len(keyValue) == 2 &&
+				strings.EqualFold(keyValue[0], "proto") &&
+				strings.EqualFold(strings.Trim(keyValue[1], `"`), "https") {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 // RegisterHandler serves the registration form and creates new user accounts.
 func RegisterHandler(db *sql.DB) http.HandlerFunc {
 
@@ -201,6 +226,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 				Path:     "/",
 				MaxAge:   sessionCookieMaxAge,
 				HttpOnly: true,
+				Secure:   secureCookieForRequest(r),
 				SameSite: http.SameSiteLaxMode,
 			})
 			// Send the user to the forum after the cookie has been set.
@@ -250,6 +276,7 @@ func LogoutHandler(db *sql.DB) http.HandlerFunc {
 			MaxAge:   -1,
 			Expires:  time.Unix(0, 0), // Some browsers are stricter, so we make it extra clear the cookie is expired.
 			HttpOnly: true,
+			Secure:   secureCookieForRequest(r),
 			SameSite: http.SameSiteLaxMode,
 		})
 
