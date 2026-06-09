@@ -12,6 +12,7 @@ workflows without a separate frontend build step.
 - Like/dislike reactions for posts and comments
 - User-specific views for created posts and liked posts
 - Owner-only post and comment deletion
+- Global browser security headers for CSP, frame protection, MIME sniffing, and referrers
 - SQLite schema initialization on startup
 - Optional deterministic seed data for local testing
 
