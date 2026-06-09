@@ -65,7 +65,7 @@ func CreatePostHandler(db *sql.DB) http.HandlerFunc {
 			for _, c := range categories {
 				w.Write([]byte(`
 				<label>
-					<input type="checkbox" name="category_ids" value="` + strconv.Itoa(c.ID) + `">` + c.Name +
+					<input type="checkbox" name="category_ids" value="` + strconv.Itoa(c.ID) + `">` + html.EscapeString(c.Name) +
 					`</label><br>`,
 				))
 			}

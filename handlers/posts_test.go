@@ -62,6 +62,45 @@ func TestCreatePostHandlerCreatesPost(t *testing.T) {
 	}
 }
 
+// TestCreatePostHandlerEscapesCategoryNames verifies category labels cannot inject HTML.
+func TestCreatePostHandlerEscapesCategoryNames(t *testing.T) {
+	db := openTestDB(t)
+
+	if err := database.CreateUser(db, "author@example.com", "author", "password"); err != nil {
+		t.Fatal(err)
+	}
+	user, err := database.GetUserByEmail(db, "author@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user == nil {
+		t.Fatal("user was not created")
+	}
+	if _, err := db.Exec("INSERT INTO categories (name) VALUES (?)", `<img src=x onerror=alert("category-xss")>`); err != nil {
+		t.Fatal(err)
+	}
+	sessionID := createSessionForUserID(t, db, "create-post-session", user.ID)
+
+	req := httptest.NewRequest(http.MethodGet, "/create-post", nil)
+	req.AddCookie(&http.Cookie{Name: "session", Value: sessionID})
+	w := httptest.NewRecorder()
+
+	CreatePostHandler(db)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %q", w.Code, http.StatusOK, w.Body.String())
+	}
+	body := w.Body.String()
+	rawCategory := `<img src=x onerror=alert("category-xss")>`
+	if strings.Contains(body, rawCategory) {
+		t.Fatalf("body contains unescaped category name %q: %q", rawCategory, body)
+	}
+	escapedCategory := `&lt;img src=x onerror=alert(&#34;category-xss&#34;)&gt;`
+	if !strings.Contains(body, escapedCategory) {
+		t.Fatalf("body = %q, want escaped category name %q", body, escapedCategory)
+	}
+}
+
 // TestCreatePostHandlerRejectsWhitespacePostFields verifies blank-looking posts cannot be created.
 func TestCreatePostHandlerRejectsWhitespacePostFields(t *testing.T) {
 	tests := []struct {
