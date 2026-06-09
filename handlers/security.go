@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"forum/database"
+	"mime"
 	"net/http"
 	"unicode/utf8"
 )
@@ -18,6 +19,12 @@ const (
 )
 
 func parseLimitedForm(w http.ResponseWriter, r *http.Request) bool {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/x-www-form-urlencoded" {
+		http.Error(w, "unsupported content type", http.StatusUnsupportedMediaType)
+		return false
+	}
+
 	r.Body = http.MaxBytesReader(w, r.Body, maxFormBodyBytes)
 
 	if err := r.ParseForm(); err != nil {

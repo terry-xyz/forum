@@ -357,6 +357,7 @@ func TestLogoutHandlerRejectsMissingCSRFToken(t *testing.T) {
 	sessionID := createSessionForTest(t, db, "user@example.com")
 
 	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: "session", Value: sessionID})
 	w := httptest.NewRecorder()
 

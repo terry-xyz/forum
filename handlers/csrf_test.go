@@ -39,6 +39,7 @@ func TestMutatingHandlersRejectMissingCSRFToken(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, tt.path, nil)
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			req.AddCookie(&http.Cookie{Name: "session", Value: sessionID})
 			w := httptest.NewRecorder()
 
