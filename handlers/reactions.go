@@ -50,6 +50,15 @@ func ReactPostHandler(db *sql.DB) http.HandlerFunc {
 			http.Error(w, "invalid post id", http.StatusBadRequest)
 			return
 		}
+		postExists, err := database.PostExists(db, postID)
+		if err != nil {
+			http.Error(w, "unable to validate post", http.StatusInternalServerError)
+			return
+		}
+		if !postExists {
+			http.Error(w, "post not found", http.StatusNotFound)
+			return
+		}
 		// Only the two schema-supported reaction values are allowed through.
 		reactionType := r.FormValue("reaction_type")
 		if reactionType != "like" && reactionType != "dislike" {
@@ -110,6 +119,15 @@ func ReactCommentHandler(db *sql.DB) http.HandlerFunc {
 		commentID, err := strconv.Atoi(commentIDStr)
 		if err != nil {
 			http.Error(w, "invalid comment id", http.StatusBadRequest)
+			return
+		}
+		commentExists, err := database.CommentExists(db, commentID)
+		if err != nil {
+			http.Error(w, "unable to validate comment", http.StatusInternalServerError)
+			return
+		}
+		if !commentExists {
+			http.Error(w, "comment not found", http.StatusNotFound)
 			return
 		}
 		// Reject anything outside the two allowed reaction values before SQL.

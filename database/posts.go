@@ -132,6 +132,17 @@ func GetAllPostsPage(db *sql.DB, limit int, offset int) ([]models.Post, error) {
 	return scanPosts(db.Query(query, limit, offset))
 }
 
+// PostExists reports whether a post row exists for a submitted ID.
+func PostExists(db *sql.DB, postID int) (bool, error) {
+	var exists bool
+	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM posts WHERE id = ?)", postID).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+
+	return exists, nil
+}
+
 // GetPostsByCategoryID returns posts that are linked to one category.
 func GetPostsByCategoryID(db *sql.DB, categoryID int) ([]models.Post, error) {
 

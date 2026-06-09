@@ -49,6 +49,15 @@ func CreateCommentHandler(db *sql.DB) http.HandlerFunc {
 			http.Error(w, "invalid post id", http.StatusBadRequest)
 			return
 		}
+		postExists, err := database.PostExists(db, postID)
+		if err != nil {
+			http.Error(w, "unable to validate post", http.StatusInternalServerError)
+			return
+		}
+		if !postExists {
+			http.Error(w, "post not found", http.StatusNotFound)
+			return
+		}
 		// Empty comments are rejected before hitting the database.
 		content := r.FormValue("content")
 		if content == "" {

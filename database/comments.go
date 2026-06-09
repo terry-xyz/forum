@@ -60,6 +60,17 @@ func GetCommentsByPostID(db *sql.DB, postID int) ([]models.Comment, error) {
 	return comments, nil
 }
 
+// CommentExists reports whether a comment row exists for a submitted ID.
+func CommentExists(db *sql.DB, commentID int) (bool, error) {
+	var exists bool
+	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM comments WHERE id = ?)", commentID).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+
+	return exists, nil
+}
+
 // DeleteCommentByIDAndAuthorID removes a comment only when the author matches.
 func DeleteCommentByIDAndAuthorID(db *sql.DB, commentID int, authorID int) error {
 

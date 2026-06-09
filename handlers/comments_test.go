@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"forum/database"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,46 @@ import (
 	"strings"
 	"testing"
 )
+
+func createAuthenticatedUserForTest(t *testing.T, db *sql.DB, email string, sessionID string) (int, string, string) {
+	t.Helper()
+
+	if err := database.CreateUser(db, email, "user-"+email, "password"); err != nil {
+		t.Fatal(err)
+	}
+	user, err := database.GetUserByEmail(db, email)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user == nil {
+		t.Fatal("user was not created")
+	}
+	sessionID = createSessionForUserID(t, db, sessionID, user.ID)
+	csrfToken := csrfTokenForTest(t, db, sessionID)
+
+	return user.ID, sessionID, csrfToken
+}
+
+func TestCreateCommentHandlerRejectsMissingPost(t *testing.T) {
+	db := openTestDB(t)
+	_, sessionID, csrfToken := createAuthenticatedUserForTest(t, db, "author@example.com", "missing-post-session")
+
+	form := url.Values{
+		"post_id":    {"9999"},
+		"content":    {"orphaned comment"},
+		"csrf_token": {csrfToken},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/comment", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "session", Value: sessionID})
+	w := httptest.NewRecorder()
+
+	CreateCommentHandler(db)(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusNotFound)
+	}
+}
 
 func TestCreateCommentHandlerRejectsOversizedContent(t *testing.T) {
 	db := openTestDB(t)
