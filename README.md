@@ -58,6 +58,9 @@ between container runs.
 
 ## Docker
 
+The Docker image runs the forum process as non-root UID `10001` and pins base
+images by digest for reproducible rebuilds.
+
 Build and run the app:
 
 ```sh
@@ -70,6 +73,9 @@ For persistent SQLite data:
 ```sh
 docker run --rm -p 8080:8080 -v "$(pwd)/forum.db:/app/forum.db" forum
 ```
+
+If your host enforces Unix file ownership on bind mounts, make sure the mounted
+`forum.db` file is writable by UID `10001`.
 
 ## Testing
 
