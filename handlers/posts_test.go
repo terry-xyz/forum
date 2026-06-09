@@ -132,6 +132,116 @@ func TestCreatePostHandlerRejectsWhitespacePostFields(t *testing.T) {
 	}
 }
 
+func TestCreatePostHandlerRejectsOversizedFields(t *testing.T) {
+	tests := []struct {
+		name    string
+		title   string
+		content string
+		message string
+	}{
+		{
+			name:    "oversized title",
+			title:   strings.Repeat("T", maxPostTitleChars+1),
+			content: "Hello forum",
+			message: "title cannot exceed 280 characters",
+		},
+		{
+			name:    "oversized content",
+			title:   "First post",
+			content: strings.Repeat("C", maxPostContentChars+1),
+			message: "content cannot exceed 280 characters",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := openTestDB(t)
+
+			if err := database.CreateUser(db, "author@example.com", "author", "password"); err != nil {
+				t.Fatal(err)
+			}
+			user, err := database.GetUserByEmail(db, "author@example.com")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if user == nil {
+				t.Fatal("user was not created")
+			}
+			sessionID := createSessionForUserID(t, db, "create-post-session", user.ID)
+			csrfToken := csrfTokenForTest(t, db, sessionID)
+
+			form := url.Values{
+				"title":        {tt.title},
+				"content":      {tt.content},
+				"category_ids": {"1"},
+				"csrf_token":   {csrfToken},
+			}
+			req := httptest.NewRequest(http.MethodPost, "/create-post", strings.NewReader(form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.AddCookie(&http.Cookie{Name: "session", Value: sessionID})
+			w := httptest.NewRecorder()
+
+			CreatePostHandler(db)(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d", w.Code, http.StatusBadRequest)
+			}
+			if !strings.Contains(w.Body.String(), tt.message) {
+				t.Fatalf("body = %q, want %q", w.Body.String(), tt.message)
+			}
+
+			posts, err := database.GetAllPosts(db)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(posts) != 0 {
+				t.Fatalf("posts = %d, want 0", len(posts))
+			}
+		})
+	}
+}
+
+func TestCreatePostHandlerRejectsOversizedRequestBody(t *testing.T) {
+	db := openTestDB(t)
+
+	if err := database.CreateUser(db, "author@example.com", "author", "password"); err != nil {
+		t.Fatal(err)
+	}
+	user, err := database.GetUserByEmail(db, "author@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user == nil {
+		t.Fatal("user was not created")
+	}
+	sessionID := createSessionForUserID(t, db, "create-post-session", user.ID)
+	csrfToken := csrfTokenForTest(t, db, sessionID)
+
+	form := url.Values{
+		"title":        {"First post"},
+		"content":      {strings.Repeat("A", int(maxFormBodyBytes))},
+		"category_ids": {"1"},
+		"csrf_token":   {csrfToken},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/create-post", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "session", Value: sessionID})
+	w := httptest.NewRecorder()
+
+	CreatePostHandler(db)(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusRequestEntityTooLarge)
+	}
+	posts, err := database.GetAllPosts(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(posts) != 0 {
+		t.Fatalf("posts = %d, want 0", len(posts))
+	}
+}
+
 // TestCreatePostHandlerRejectsMissingCSRFToken verifies a valid session alone is not enough for writes.
 func TestCreatePostHandlerRejectsMissingCSRFToken(t *testing.T) {
 	db := openTestDB(t)

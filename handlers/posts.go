@@ -79,18 +79,14 @@ func CreatePostHandler(db *sql.DB) http.HandlerFunc {
 
 		// POST validates submitted data, creates the post, and links categories.
 		if r.Method == http.MethodPost {
+			if !parseLimitedForm(w, r) {
+				return
+			}
 			if !validCSRFToken(db, r, cookie.Value) {
 				http.Error(w, "invalid csrf token", http.StatusForbidden)
 				return
 			}
 
-			// ParseForm is required here because category_ids is read from r.Form
-			// as a repeated value.
-			err := r.ParseForm()
-			if err != nil {
-				http.Error(w, "bad form data", http.StatusBadRequest)
-				return
-			}
 			// Scalar fields come from the submitted form body.
 			title := strings.TrimSpace(r.FormValue("title"))
 			content := strings.TrimSpace(r.FormValue("content"))
@@ -101,6 +97,14 @@ func CreatePostHandler(db *sql.DB) http.HandlerFunc {
 			}
 			if content == "" {
 				http.Error(w, "content cannot be empty", http.StatusBadRequest)
+				return
+			}
+			if exceedsCharacterLimit(title, maxPostTitleChars) {
+				http.Error(w, "title cannot exceed 280 characters", http.StatusBadRequest)
+				return
+			}
+			if exceedsCharacterLimit(content, maxPostContentChars) {
+				http.Error(w, "content cannot exceed 280 characters", http.StatusBadRequest)
 				return
 			}
 
@@ -310,6 +314,9 @@ func DeletePostHandler(db *sql.DB) http.HandlerFunc {
 		}
 		if userID == 0 {
 			http.Error(w, "invalid session", http.StatusUnauthorized)
+			return
+		}
+		if !parseLimitedForm(w, r) {
 			return
 		}
 		if !validCSRFToken(db, r, cookie.Value) {

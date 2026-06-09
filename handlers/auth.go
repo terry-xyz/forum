@@ -38,6 +38,10 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 
 		// POST consumes submitted account details and attempts to persist them.
 		if r.Method == http.MethodPost {
+			if !parseLimitedForm(w, r) {
+				return
+			}
+
 			// FormValue parses form data on demand and returns an empty string
 			// when a field is absent.
 			email := strings.TrimSpace(r.FormValue("email"))
@@ -52,6 +56,10 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 			}
 			if username == "" {
 				http.Error(w, "username cannot be empty", http.StatusBadRequest)
+				return
+			}
+			if exceedsCharacterLimit(username, maxUsernameChars) {
+				http.Error(w, "username cannot exceed 280 characters", http.StatusBadRequest)
 				return
 			}
 			if len(password) < 8 {
@@ -118,6 +126,10 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 
 		// POST validates submitted credentials against the users table.
 		if r.Method == http.MethodPost {
+			if !parseLimitedForm(w, r) {
+				return
+			}
+
 			// Read the two fields the form submits; missing fields become empty
 			// strings and naturally fail the credential check.
 			email := strings.TrimSpace(r.FormValue("email"))
@@ -216,6 +228,9 @@ func LogoutHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		if !parseLimitedForm(w, r) {
+			return
+		}
 		if !validCSRFToken(db, r, cookie.Value) {
 			http.Error(w, "invalid csrf token", http.StatusForbidden)
 			return

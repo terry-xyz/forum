@@ -34,6 +34,9 @@ func CreateCommentHandler(db *sql.DB) http.HandlerFunc {
 			http.Error(w, "invalid session", http.StatusUnauthorized)
 			return
 		}
+		if !parseLimitedForm(w, r) {
+			return
+		}
 		if !validCSRFToken(db, r, cookie.Value) {
 			http.Error(w, "invalid csrf token", http.StatusForbidden)
 			return
@@ -50,6 +53,10 @@ func CreateCommentHandler(db *sql.DB) http.HandlerFunc {
 		content := r.FormValue("content")
 		if content == "" {
 			http.Error(w, "comment cannot be empty", http.StatusBadRequest)
+			return
+		}
+		if exceedsCharacterLimit(content, maxCommentContentChars) {
+			http.Error(w, "comment cannot exceed 280 characters", http.StatusBadRequest)
 			return
 		}
 
@@ -91,6 +98,9 @@ func DeleteCommentHandler(db *sql.DB) http.HandlerFunc {
 		}
 		if userID == 0 {
 			http.Error(w, "invalid session", http.StatusUnauthorized)
+			return
+		}
+		if !parseLimitedForm(w, r) {
 			return
 		}
 		if !validCSRFToken(db, r, cookie.Value) {
