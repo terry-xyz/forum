@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+const sqliteTimestampFormat = "2006-01-02 15:04:05"
+
 // CreateSession stores a browser session token with its owning user, CSRF token, and expiry time.
 func CreateSession(db *sql.DB, sessionID string, userID int, csrfToken string, expiresAt time.Time) error {
 
@@ -12,7 +14,7 @@ func CreateSession(db *sql.DB, sessionID string, userID int, csrfToken string, e
 	query := "INSERT INTO sessions (id, user_id, csrf_token, expires_at) VALUES(?, ?, ?, ?)"
 
 	// Store the expiry in the row so later lookups can reject stale cookies.
-	_, err := db.Exec(query, sessionID, userID, csrfToken, expiresAt)
+	_, err := db.Exec(query, sessionID, userID, csrfToken, sqliteTimestamp(expiresAt))
 	if err != nil {
 		return err
 	}
@@ -26,7 +28,7 @@ func GetCSRFTokenBySessionID(db *sql.DB, sessionID string) (string, error) {
 	query := `
 		SELECT csrf_token
 		FROM sessions
-		WHERE id = ? AND expires_at > CURRENT_TIMESTAMP
+		WHERE id = ? AND datetime(expires_at) > CURRENT_TIMESTAMP
 	`
 	row := db.QueryRow(query, sessionID)
 
@@ -50,7 +52,7 @@ func GetUserIDBySessionID(db *sql.DB, sessionID string) (int, error) {
 	query := `
 		SELECT user_id
 		FROM sessions
-		WHERE id = ? AND expires_at > CURRENT_TIMESTAMP
+		WHERE id = ? AND datetime(expires_at) > CURRENT_TIMESTAMP
 	`
 	row := db.QueryRow(query, sessionID)
 
@@ -102,7 +104,7 @@ func DeleteExpiredSessions(db *sql.DB) error {
 	// basis as GetUserIDBySessionID.
 	query := `
 		DELETE FROM sessions
-		WHERE expires_at <= CURRENT_TIMESTAMP
+		WHERE datetime(expires_at) <= CURRENT_TIMESTAMP
 	`
 	_, err := db.Exec(query)
 	if err != nil {
@@ -111,4 +113,8 @@ func DeleteExpiredSessions(db *sql.DB) error {
 
 	// Callers do not need the count of removed rows.
 	return nil
+}
+
+func sqliteTimestamp(t time.Time) string {
+	return t.UTC().Format(sqliteTimestampFormat)
 }
