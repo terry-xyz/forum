@@ -2,23 +2,38 @@ package database
 
 import (
 	"database/sql"
+	"fmt"
 	"os"
 
 	_ "github.com/mattn/go-sqlite3"
+)
+
+const (
+	sqliteBusyTimeoutMilliseconds = 5000
+	sqliteMaxOpenConnections      = 1
 )
 
 // InitDB opens the forum database file and applies the schema idempotently.
 func InitDB() (*sql.DB, error) {
 	// sql.Open creates a database handle; it does not immediately guarantee
 	// that the file can be reached or that the driver can connect.
-	db, err := sql.Open("sqlite3", "forum.db?_foreign_keys=on")
+	db, err := sql.Open(
+		"sqlite3",
+		fmt.Sprintf("forum.db?_foreign_keys=on&_busy_timeout=%d&_journal_mode=WAL", sqliteBusyTimeoutMilliseconds),
+	)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := configureSQLiteConnection(db); err != nil {
+		db.Close()
 		return nil, err
 	}
 
 	// sql.Open validates its arguments lazily, so Ping confirms the database is reachable.
 	err = db.Ping()
 	if err != nil {
+		db.Close()
 		return nil, err
 	}
 
@@ -26,6 +41,7 @@ func InitDB() (*sql.DB, error) {
 	// initialize databases from the same source.
 	schema, err := os.ReadFile("database/schema.sql")
 	if err != nil {
+		db.Close()
 		return nil, err
 	}
 
@@ -33,14 +49,27 @@ func InitDB() (*sql.DB, error) {
 	// startup creates missing tables without dropping existing data.
 	_, err = db.Exec(string(schema))
 	if err != nil {
+		db.Close()
 		return nil, err
 	}
 	if err := ensureSessionCSRFColumn(db); err != nil {
+		db.Close()
 		return nil, err
 	}
 
 	// Return the shared handle for handlers and database helper functions.
 	return db, nil
+}
+
+func configureSQLiteConnection(db *sql.DB) error {
+	db.SetMaxOpenConns(sqliteMaxOpenConnections)
+	db.SetMaxIdleConns(sqliteMaxOpenConnections)
+
+	if _, err := db.Exec("PRAGMA journal_mode = WAL"); err != nil {
+		return err
+	}
+	_, err := db.Exec(fmt.Sprintf("PRAGMA busy_timeout = %d", sqliteBusyTimeoutMilliseconds))
+	return err
 }
 
 func ensureSessionCSRFColumn(db *sql.DB) error {

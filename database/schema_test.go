@@ -113,6 +113,41 @@ func TestSchemaRejectsOrphanedRelationships(t *testing.T) {
 	}
 }
 
+// TestConfigureSQLiteConnectionTuning verifies the application opts into
+// SQLite settings that prevent normal request bursts from failing immediately.
+func TestConfigureSQLiteConnectionTuning(t *testing.T) {
+	db, err := sql.Open("sqlite3", t.TempDir()+"/forum.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	if err := configureSQLiteConnection(db); err != nil {
+		t.Fatal(err)
+	}
+
+	var journalMode string
+	if err := db.QueryRow("PRAGMA journal_mode").Scan(&journalMode); err != nil {
+		t.Fatal(err)
+	}
+	if journalMode != "wal" {
+		t.Fatalf("journal_mode = %q, want %q", journalMode, "wal")
+	}
+
+	var busyTimeout int
+	if err := db.QueryRow("PRAGMA busy_timeout").Scan(&busyTimeout); err != nil {
+		t.Fatal(err)
+	}
+	if busyTimeout < sqliteBusyTimeoutMilliseconds {
+		t.Fatalf("busy_timeout = %d, want at least %d", busyTimeout, sqliteBusyTimeoutMilliseconds)
+	}
+
+	stats := db.Stats()
+	if stats.MaxOpenConnections != sqliteMaxOpenConnections {
+		t.Fatalf("MaxOpenConnections = %d, want %d", stats.MaxOpenConnections, sqliteMaxOpenConnections)
+	}
+}
+
 // TestEnsureSessionCSRFColumnUpgradesLegacyTable verifies existing databases can accept new sessions.
 func TestEnsureSessionCSRFColumnUpgradesLegacyTable(t *testing.T) {
 	db, err := sql.Open("sqlite3", t.TempDir()+"/forum.db?_foreign_keys=on")
