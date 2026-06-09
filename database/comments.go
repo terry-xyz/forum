@@ -69,11 +69,18 @@ func DeleteCommentByIDAndAuthorID(db *sql.DB, commentID int, authorID int) error
 		DELETE FROM comments
 		WHERE id = ? AND author_id = ?
 	`
-	_, err := db.Exec(query, commentID, authorID)
+	result, err := db.Exec(query, commentID, authorID)
 	if err != nil {
 		return err
 	}
 
-	// A zero-row delete is not treated as an error by this helper.
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+
 	return nil
 }

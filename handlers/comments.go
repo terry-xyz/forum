@@ -120,6 +120,11 @@ func DeleteCommentHandler(db *sql.DB) http.HandlerFunc {
 		// cannot remove comments they do not own.
 		err = database.DeleteCommentByIDAndAuthorID(db, commentID, userID)
 		if err != nil {
+			if err == sql.ErrNoRows {
+				http.Error(w, "comment not found or not yours", http.StatusForbidden)
+				return
+			}
+
 			http.Error(w, "unable to delete comment", http.StatusInternalServerError)
 			return
 		}
