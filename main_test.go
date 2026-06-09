@@ -7,6 +7,46 @@ import (
 	"time"
 )
 
+func TestConfiguredServerAddressDefaultsToLocalPort(t *testing.T) {
+	t.Setenv("PORT", "")
+
+	if got := configuredServerAddress(); got != ":8080" {
+		t.Fatalf("configuredServerAddress() = %q, want %q", got, ":8080")
+	}
+}
+
+func TestConfiguredServerAddressUsesPortEnvironment(t *testing.T) {
+	t.Setenv("PORT", "9090")
+
+	if got := configuredServerAddress(); got != ":9090" {
+		t.Fatalf("configuredServerAddress() = %q, want %q", got, ":9090")
+	}
+}
+
+func TestConfiguredServerAddressAcceptsFullAddress(t *testing.T) {
+	t.Setenv("PORT", "127.0.0.1:9090")
+
+	if got := configuredServerAddress(); got != "127.0.0.1:9090" {
+		t.Fatalf("configuredServerAddress() = %q, want %q", got, "127.0.0.1:9090")
+	}
+}
+
+func TestConfiguredDatabasePathDefaultsToForumDB(t *testing.T) {
+	t.Setenv("DATABASE_PATH", "")
+
+	if got := configuredDatabasePath(); got != "forum.db" {
+		t.Fatalf("configuredDatabasePath() = %q, want %q", got, "forum.db")
+	}
+}
+
+func TestConfiguredDatabasePathUsesEnvironment(t *testing.T) {
+	t.Setenv("DATABASE_PATH", "data/staging.db")
+
+	if got := configuredDatabasePath(); got != "data/staging.db" {
+		t.Fatalf("configuredDatabasePath() = %q, want %q", got, "data/staging.db")
+	}
+}
+
 func TestNewHTTPServerConfiguresTimeouts(t *testing.T) {
 	server := newHTTPServer(":0")
 

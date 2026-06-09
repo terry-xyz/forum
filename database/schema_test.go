@@ -148,6 +148,15 @@ func TestConfigureSQLiteConnectionTuning(t *testing.T) {
 	}
 }
 
+func TestSQLiteDataSourceNameUsesConfiguredPath(t *testing.T) {
+	got := sqliteDataSourceName("data/staging.db")
+	want := "data/staging.db?_foreign_keys=on&_busy_timeout=5000&_journal_mode=WAL"
+
+	if got != want {
+		t.Fatalf("sqliteDataSourceName() = %q, want %q", got, want)
+	}
+}
+
 // TestEnsureSessionCSRFColumnUpgradesLegacyTable verifies existing databases can accept new sessions.
 func TestEnsureSessionCSRFColumnUpgradesLegacyTable(t *testing.T) {
 	db, err := sql.Open("sqlite3", t.TempDir()+"/forum.db?_foreign_keys=on")

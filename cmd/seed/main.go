@@ -4,12 +4,20 @@ import (
 	"fmt"
 	"forum/database"
 	"os"
+	"strings"
 )
+
+const defaultDatabasePath = "forum.db"
 
 // main opens the forum database and fills it with deterministic demo data.
 func main() {
+	databasePath := strings.TrimSpace(os.Getenv("DATABASE_PATH"))
+	if databasePath == "" {
+		databasePath = defaultDatabasePath
+	}
+
 	// InitDB applies the schema first so the seed can run on a fresh checkout.
-	db, err := database.InitDB()
+	db, err := database.InitDB(databasePath)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -22,5 +30,5 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("seeded forum.db with fake forum data")
+	fmt.Printf("seeded %s with fake forum data\n", databasePath)
 }

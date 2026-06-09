@@ -21,6 +21,9 @@ RUN chmod 0755 /app/forum && chown -R 10001:10001 /app
 
 USER 10001:10001
 
+ENV PORT=8080
+ENV DATABASE_PATH=/app/forum.db
+
 EXPOSE 8080
 
 CMD ["./forum"]

@@ -4,23 +4,22 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
 const (
+	defaultDatabasePath           = "forum.db"
 	sqliteBusyTimeoutMilliseconds = 5000
 	sqliteMaxOpenConnections      = 1
 )
 
 // InitDB opens the forum database file and applies the schema idempotently.
-func InitDB() (*sql.DB, error) {
+func InitDB(databasePath string) (*sql.DB, error) {
 	// sql.Open creates a database handle; it does not immediately guarantee
 	// that the file can be reached or that the driver can connect.
-	db, err := sql.Open(
-		"sqlite3",
-		fmt.Sprintf("forum.db?_foreign_keys=on&_busy_timeout=%d&_journal_mode=WAL", sqliteBusyTimeoutMilliseconds),
-	)
+	db, err := sql.Open("sqlite3", sqliteDataSourceName(databasePath))
 	if err != nil {
 		return nil, err
 	}
@@ -59,6 +58,20 @@ func InitDB() (*sql.DB, error) {
 
 	// Return the shared handle for handlers and database helper functions.
 	return db, nil
+}
+
+func sqliteDataSourceName(databasePath string) string {
+	databasePath = strings.TrimSpace(databasePath)
+	if databasePath == "" {
+		databasePath = defaultDatabasePath
+	}
+
+	separator := "?"
+	if strings.Contains(databasePath, "?") {
+		separator = "&"
+	}
+
+	return fmt.Sprintf("%s%s_foreign_keys=on&_busy_timeout=%d&_journal_mode=WAL", databasePath, separator, sqliteBusyTimeoutMilliseconds)
 }
 
 func configureSQLiteConnection(db *sql.DB) error {

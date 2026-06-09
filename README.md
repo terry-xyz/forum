@@ -34,6 +34,12 @@ Open `http://localhost:8080`.
 The app creates `forum.db` in the repository root and applies
 `database/schema.sql` automatically on startup.
 
+To use a different port or SQLite file:
+
+```sh
+PORT=9090 DATABASE_PATH=data/forum.db go run .
+```
+
 ## Seed Data
 
 Populate the local database with sample users, posts, comments, and reactions:
@@ -48,14 +54,24 @@ Seeded accounts use `password123` as the password.
 
 ```sh
 make run              # run the server
+make run-config       # run with PORT and DATABASE_PATH from this Makefile
+make seed             # populate the configured database
 make test             # run all tests
+make test-long        # repeat the full test suite
 make docker-build     # build the Docker image
+make docker-rebuild   # rebuild the Docker image without cache
+make docker-test      # run tests inside the Go Docker image
+make docker-test-long # repeat Docker tests
 make docker-run       # run the container on port 8080
 make docker-run-persist
+make docker-run-detached
+make docker-logs
+make docker-stop
 ```
 
-`docker-run-persist` mounts `forum.db` into the container so data survives
-between container runs.
+Set `PORT` to change the host port and `DATABASE_PATH` to change the local
+database path. `docker-run-persist` and `docker-run-detached` mount `data/`
+into the container and store SQLite data at `/app/data/forum.db`.
 
 ## Docker
 
@@ -72,11 +88,12 @@ docker run --rm -p 8080:8080 forum
 For persistent SQLite data:
 
 ```sh
-docker run --rm -p 8080:8080 -v "$(pwd)/forum.db:/app/forum.db" forum
+mkdir -p data
+docker run --rm -p 8080:8080 -e DATABASE_PATH=/app/data/forum.db -v "$(pwd)/data:/app/data" forum
 ```
 
 If your host enforces Unix file ownership on bind mounts, make sure the mounted
-`forum.db` file is writable by UID `10001`.
+data directory is writable by UID `10001`.
 
 ## Testing
 
