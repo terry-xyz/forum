@@ -51,7 +51,7 @@ func validCSRFToken(db *sql.DB, r *http.Request, sessionID string) bool {
 		return false
 	}
 
-	submittedToken := r.FormValue("csrf_token")
+	submittedToken := r.PostForm.Get("csrf_token")
 	if submittedToken == "" || len(submittedToken) != len(expectedToken) {
 		return false
 	}
