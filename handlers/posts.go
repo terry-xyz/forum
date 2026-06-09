@@ -180,12 +180,20 @@ func MyPostsHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		page, err := parsePage(r)
+		if err != nil {
+			http.Error(w, "invalid page", http.StatusBadRequest)
+			return
+		}
+		offset := (page - 1) * feedPageSize
+
 		// Query by author_id so the page shows only posts owned by this user.
-		posts, err := database.GetPostsByAuthorID(db, userID)
+		posts, err := database.GetPostsByAuthorIDPage(db, userID, feedPageSize+1, offset)
 		if err != nil {
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
 		}
+		posts, hasNext := trimPage(posts)
 
 		currentUser, err := database.GetUserByID(db, userID)
 		if err != nil {
@@ -212,7 +220,7 @@ func MyPostsHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		if err := renderHomePage(w, db, posts, currentUser, emptyMessage, csrfToken); err != nil {
+		if err := renderHomePage(w, db, posts, currentUser, emptyMessage, csrfToken, paginationForRequest(r, page, hasNext)); err != nil {
 			http.Error(w, "failed to render posts", http.StatusInternalServerError)
 			return
 		}
@@ -248,12 +256,20 @@ func LikedPostsHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		page, err := parsePage(r)
+		if err != nil {
+			http.Error(w, "invalid page", http.StatusBadRequest)
+			return
+		}
+		offset := (page - 1) * feedPageSize
+
 		// Join through post_reactions so only posts this user liked are returned.
-		posts, err := database.GetLikedPostsByUserID(db, userID)
+		posts, err := database.GetLikedPostsByUserIDPage(db, userID, feedPageSize+1, offset)
 		if err != nil {
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
 		}
+		posts, hasNext := trimPage(posts)
 
 		currentUser, err := database.GetUserByID(db, userID)
 		if err != nil {
@@ -280,7 +296,7 @@ func LikedPostsHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		if err := renderHomePage(w, db, posts, currentUser, emptyMessage, csrfToken); err != nil {
+		if err := renderHomePage(w, db, posts, currentUser, emptyMessage, csrfToken, paginationForRequest(r, page, hasNext)); err != nil {
 			http.Error(w, "failed to render posts", http.StatusInternalServerError)
 			return
 		}

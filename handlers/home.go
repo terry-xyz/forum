@@ -2,11 +2,18 @@ package handlers
 
 import (
 	"database/sql"
+	"errors"
 	"forum/database"
 	"forum/models"
 	"forum/templates"
 	"net/http"
+	"net/url"
 	"strconv"
+)
+
+const (
+	feedPageSize            = 20
+	feedCommentPreviewLimit = 5
 )
 
 type homeView struct {
@@ -15,9 +22,13 @@ type homeView struct {
 	CSRFToken    string
 	Posts        []renderedPost
 	EmptyMessage string
+	HasPrev      bool
+	HasNext      bool
+	PrevURL      string
+	NextURL      string
 }
 
-func renderHomePage(w http.ResponseWriter, db *sql.DB, posts []models.Post, currentUser *models.User, emptyMessage string, csrfToken string) error {
+func renderHomePage(w http.ResponseWriter, db *sql.DB, posts []models.Post, currentUser *models.User, emptyMessage string, csrfToken string, pagination paginationView) error {
 	allCategories, err := database.GetAllCategories(db)
 	if err != nil {
 		return err
@@ -34,7 +45,74 @@ func renderHomePage(w http.ResponseWriter, db *sql.DB, posts []models.Post, curr
 		CSRFToken:    csrfToken,
 		Posts:        renderedPosts,
 		EmptyMessage: emptyMessage,
+		HasPrev:      pagination.HasPrev,
+		HasNext:      pagination.HasNext,
+		PrevURL:      pagination.PrevURL,
+		NextURL:      pagination.NextURL,
 	})
+}
+
+type paginationView struct {
+	HasPrev bool
+	HasNext bool
+	PrevURL string
+	NextURL string
+}
+
+func parsePage(r *http.Request) (int, error) {
+	pageValue := r.URL.Query().Get("page")
+	if pageValue == "" {
+		return 1, nil
+	}
+
+	page, err := strconv.Atoi(pageValue)
+	if err != nil {
+		return 0, err
+	}
+	if page < 1 {
+		return 0, errors.New("page must be positive")
+	}
+
+	return page, nil
+}
+
+func paginationForRequest(r *http.Request, page int, hasNext bool) paginationView {
+	return paginationView{
+		HasPrev: page > 1,
+		HasNext: hasNext,
+		PrevURL: pageURL(r.URL.Path, r.URL.Query(), page-1),
+		NextURL: pageURL(r.URL.Path, r.URL.Query(), page+1),
+	}
+}
+
+func pageURL(path string, values url.Values, page int) string {
+	if page < 1 {
+		page = 1
+	}
+
+	copiedValues := make(url.Values, len(values))
+	for key, value := range values {
+		copiedValues[key] = append([]string(nil), value...)
+	}
+	if page == 1 {
+		copiedValues.Del("page")
+	} else {
+		copiedValues.Set("page", strconv.Itoa(page))
+	}
+
+	query := copiedValues.Encode()
+	if query == "" {
+		return path
+	}
+	return path + "?" + query
+}
+
+func trimPage(posts []models.Post) ([]models.Post, bool) {
+	if len(posts) <= feedPageSize {
+		return posts, false
+	}
+
+	return posts[:feedPageSize], true
 }
 
 // HomeHandler renders the forum home page for guests and adds user actions when a session is valid.
@@ -72,13 +150,20 @@ func HomeHandler(db *sql.DB) http.HandlerFunc {
 				}
 			}
 
+			page, err := parsePage(r)
+			if err != nil {
+				http.Error(w, "invalid page", http.StatusBadRequest)
+				return
+			}
+			offset := (page - 1) * feedPageSize
+
 			// Choose between the default feed and a category-filtered feed based
 			// on the optional query string.
 			var posts []models.Post
 			categoryIDStr := r.URL.Query().Get("category_id")
 			if categoryIDStr == "" {
-				// No filter means the full post list should be shown.
-				posts, err = database.GetAllPosts(db)
+				// No filter means the newest feed page should be shown.
+				posts, err = database.GetAllPostsPage(db, feedPageSize+1, offset)
 				if err != nil {
 					http.Error(w, "internal server error", http.StatusInternalServerError)
 					return
@@ -92,15 +177,16 @@ func HomeHandler(db *sql.DB) http.HandlerFunc {
 					return
 				}
 				// A valid category ID narrows the feed to posts linked to it.
-				posts, err = database.GetPostsByCategoryID(db, categoryID)
+				posts, err = database.GetPostsByCategoryIDPage(db, categoryID, feedPageSize+1, offset)
 				if err != nil {
 					http.Error(w, "internal server error", http.StatusInternalServerError)
 					return
 				}
 			}
+			posts, hasNext := trimPage(posts)
 
 			// Render the full page from the file-backed template.
-			if err := renderHomePage(w, db, posts, currentUser, "", csrfToken); err != nil {
+			if err := renderHomePage(w, db, posts, currentUser, "", csrfToken, paginationForRequest(r, page, hasNext)); err != nil {
 				http.Error(w, "failed to render home page", http.StatusInternalServerError)
 				return
 			}

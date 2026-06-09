@@ -121,6 +121,17 @@ func GetAllPosts(db *sql.DB) ([]models.Post, error) {
 	return posts, nil
 }
 
+// GetAllPostsPage returns one newest-first page of posts.
+func GetAllPostsPage(db *sql.DB, limit int, offset int) ([]models.Post, error) {
+	query := `
+		SELECT id, author_id, title, content, created_at
+		FROM posts
+		ORDER BY created_at DESC, id DESC
+		LIMIT ? OFFSET ?
+	`
+	return scanPosts(db.Query(query, limit, offset))
+}
+
 // GetPostsByCategoryID returns posts that are linked to one category.
 func GetPostsByCategoryID(db *sql.DB, categoryID int) ([]models.Post, error) {
 
@@ -163,6 +174,19 @@ func GetPostsByCategoryID(db *sql.DB, categoryID int) ([]models.Post, error) {
 	return posts, nil
 }
 
+// GetPostsByCategoryIDPage returns one newest-first page of posts linked to a category.
+func GetPostsByCategoryIDPage(db *sql.DB, categoryID int, limit int, offset int) ([]models.Post, error) {
+	query := `
+		SELECT p.id, p.author_id, p.title, p.content, p.created_at
+		FROM posts p
+		JOIN post_categories pc ON pc.post_id = p.id
+		WHERE pc.category_id = ?
+		ORDER BY p.created_at DESC, p.id DESC
+		LIMIT ? OFFSET ?
+	`
+	return scanPosts(db.Query(query, categoryID, limit, offset))
+}
+
 // GetPostsByAuthorID returns posts created by one user in newest-first order.
 func GetPostsByAuthorID(db *sql.DB, authorID int) ([]models.Post, error) {
 
@@ -203,6 +227,18 @@ func GetPostsByAuthorID(db *sql.DB, authorID int) ([]models.Post, error) {
 	return posts, nil
 }
 
+// GetPostsByAuthorIDPage returns one newest-first page of posts created by a user.
+func GetPostsByAuthorIDPage(db *sql.DB, authorID int, limit int, offset int) ([]models.Post, error) {
+	query := `
+		SELECT id, author_id, title, content, created_at
+		FROM posts
+		WHERE author_id = ?
+		ORDER BY created_at DESC, id DESC
+		LIMIT ? OFFSET ?
+	`
+	return scanPosts(db.Query(query, authorID, limit, offset))
+}
+
 // GetLikedPostsByUserID returns posts the user liked, ordered newest first.
 func GetLikedPostsByUserID(db *sql.DB, userID int) ([]models.Post, error) {
 
@@ -237,6 +273,40 @@ func GetLikedPostsByUserID(db *sql.DB, userID int) ([]models.Post, error) {
 	}
 
 	// Return delayed cursor errors that can happen after Query succeeds.
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return posts, nil
+}
+
+// GetLikedPostsByUserIDPage returns one newest-first page of posts the user liked.
+func GetLikedPostsByUserIDPage(db *sql.DB, userID int, limit int, offset int) ([]models.Post, error) {
+	query := `
+		SELECT p.id, p.author_id, p.title, p.content, p.created_at
+		FROM posts p
+		JOIN post_reactions pr ON pr.post_id = p.id
+		WHERE pr.user_id = ? AND pr.reaction_type = 'like'
+		ORDER BY p.created_at DESC, p.id DESC
+		LIMIT ? OFFSET ?
+	`
+	return scanPosts(db.Query(query, userID, limit, offset))
+}
+
+func scanPosts(rows *sql.Rows, err error) ([]models.Post, error) {
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var posts []models.Post
+	for rows.Next() {
+		var post models.Post
+		if err := rows.Scan(&post.ID, &post.AuthorID, &post.Title, &post.Content, &post.CreatedAt); err != nil {
+			return nil, err
+		}
+		posts = append(posts, post)
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}

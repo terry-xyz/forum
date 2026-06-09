@@ -66,6 +66,14 @@ CREATE TABLE IF NOT EXISTS post_categories (
     FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
 );
 
+CREATE INDEX IF NOT EXISTS idx_posts_created_at_id ON posts(created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_posts_author_created_at_id ON posts(author_id, created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_post_categories_category_post ON post_categories(category_id, post_id);
+CREATE INDEX IF NOT EXISTS idx_post_categories_post_category ON post_categories(post_id, category_id);
+CREATE INDEX IF NOT EXISTS idx_comments_post_created_at_id ON comments(post_id, created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_post_reactions_post_type ON post_reactions(post_id, reaction_type);
+CREATE INDEX IF NOT EXISTS idx_comment_reactions_comment_type ON comment_reactions(comment_id, reaction_type);
+
 CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL,

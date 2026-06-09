@@ -29,6 +29,12 @@
 			{{range .Posts}}
 				{{template "post" .}}
 			{{end}}
+			{{if or .HasPrev .HasNext}}
+				<nav>
+					{{if .HasPrev}}<a href="{{.PrevURL}}">Previous</a>{{end}}
+					{{if .HasNext}}<a href="{{.NextURL}}">Next</a>{{end}}
+				</nav>
+			{{end}}
 		{{end}}
 	</main>
 </body>

@@ -35,64 +35,73 @@ type renderedComment struct {
 // buildRenderedPosts resolves feed data into the view model used by the home template.
 func buildRenderedPosts(db *sql.DB, posts []models.Post, currentUser *models.User, csrfToken string) ([]renderedPost, error) {
 	renderedPosts := make([]renderedPost, 0, len(posts))
+	if len(posts) == 0 {
+		return renderedPosts, nil
+	}
+
+	postIDs := make([]int, 0, len(posts))
+	authorIDs := make([]int, 0, len(posts))
+	for _, post := range posts {
+		postIDs = append(postIDs, post.ID)
+		authorIDs = append(authorIDs, post.AuthorID)
+	}
+
+	postAuthors, err := database.GetUsersByIDs(db, uniqueInts(authorIDs))
+	if err != nil {
+		return nil, err
+	}
+	postReactions, err := database.CountPostReactionsByPostIDs(db, postIDs)
+	if err != nil {
+		return nil, err
+	}
+	categoriesByPost, err := database.GetCategoriesByPostIDs(db, postIDs)
+	if err != nil {
+		return nil, err
+	}
+	commentsByPost, err := database.GetRecentCommentsByPostIDs(db, postIDs, feedCommentPreviewLimit)
+	if err != nil {
+		return nil, err
+	}
+
+	commentAuthorIDs := make([]int, 0)
+	commentIDs := make([]int, 0)
+	for _, comments := range commentsByPost {
+		for _, comment := range comments {
+			commentAuthorIDs = append(commentAuthorIDs, comment.AuthorID)
+			commentIDs = append(commentIDs, comment.ID)
+		}
+	}
+	commentAuthors, err := database.GetUsersByIDs(db, uniqueInts(commentAuthorIDs))
+	if err != nil {
+		return nil, err
+	}
+	commentReactions, err := database.CountCommentReactionsByCommentIDs(db, commentIDs)
+	if err != nil {
+		return nil, err
+	}
 
 	for _, p := range posts {
-		// Resolve author IDs while rendering so the UI can show usernames.
-		author, err := database.GetUserByID(db, p.AuthorID)
-		if err != nil {
-			return nil, err
-		}
-		if author == nil {
+		author, ok := postAuthors[p.AuthorID]
+		if !ok {
 			return nil, errors.New("post author not found")
 		}
 
-		// Reaction totals are stored as separate rows and counted per type.
-		postLikes, err := database.CountPostReactions(db, p.ID, "like")
-		if err != nil {
-			return nil, err
-		}
-		postDislikes, err := database.CountPostReactions(db, p.ID, "dislike")
-		if err != nil {
-			return nil, err
-		}
-
-		// Categories are rendered as inline labels under each post.
-		categories, err := database.GetCategoriesByPostID(db, p.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		// Load comments and their authors before writing comment markup so
-		// any database error can stop the response consistently.
-		comments, err := database.GetCommentsByPostID(db, p.ID)
-		if err != nil {
-			return nil, err
-		}
+		postReactionCounts := postReactions[p.ID]
+		comments := commentsByPost[p.ID]
 		renderedComments := make([]renderedComment, 0, len(comments))
 		for _, c := range comments {
-			// Each comment stores only author_id, so look up the display name.
-			commentAuthor, err := database.GetUserByID(db, c.AuthorID)
-			if err != nil {
-				return nil, err
-			}
-			if commentAuthor == nil {
+			commentAuthor, ok := commentAuthors[c.AuthorID]
+			if !ok {
 				return nil, errors.New("comment author not found")
 			}
-			commentLikes, err := database.CountCommentReactions(db, c.ID, "like")
-			if err != nil {
-				return nil, err
-			}
-			commentDislikes, err := database.CountCommentReactions(db, c.ID, "dislike")
-			if err != nil {
-				return nil, err
-			}
+			commentReactionCounts := commentReactions[c.ID]
 
 			renderedComments = append(renderedComments, renderedComment{
 				ID:              c.ID,
 				AuthorName:      commentAuthor.Username,
 				Content:         c.Content,
-				Likes:           commentLikes,
-				Dislikes:        commentDislikes,
+				Likes:           commentReactionCounts.Likes,
+				Dislikes:        commentReactionCounts.Dislikes,
 				IsAuthenticated: currentUser != nil,
 				CanDelete:       currentUser != nil && currentUser.ID == c.AuthorID,
 				CSRFToken:       csrfToken,
@@ -104,9 +113,9 @@ func buildRenderedPosts(db *sql.DB, posts []models.Post, currentUser *models.Use
 			Title:           p.Title,
 			Content:         p.Content,
 			AuthorName:      author.Username,
-			Categories:      categories,
-			Likes:           postLikes,
-			Dislikes:        postDislikes,
+			Categories:      categoriesByPost[p.ID],
+			Likes:           postReactionCounts.Likes,
+			Dislikes:        postReactionCounts.Dislikes,
 			IsAuthenticated: currentUser != nil,
 			CanDelete:       currentUser != nil && currentUser.ID == p.AuthorID,
 			CSRFToken:       csrfToken,
@@ -115,4 +124,17 @@ func buildRenderedPosts(db *sql.DB, posts []models.Post, currentUser *models.Use
 	}
 
 	return renderedPosts, nil
+}
+
+func uniqueInts(values []int) []int {
+	seen := make(map[int]bool, len(values))
+	unique := make([]int, 0, len(values))
+	for _, value := range values {
+		if seen[value] {
+			continue
+		}
+		seen[value] = true
+		unique = append(unique, value)
+	}
+	return unique
 }

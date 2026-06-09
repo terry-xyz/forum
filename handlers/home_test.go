@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -163,6 +164,100 @@ func TestHomeHandlerRendersCommentsWithAuthors(t *testing.T) {
 	}
 	if !strings.Contains(body, "<p>first comment</p>") {
 		t.Fatalf("body = %q, want rendered comment content", body)
+	}
+}
+
+// TestHomeHandlerLimitsDefaultFeedToFirstPage verifies the feed cannot render every stored post.
+func TestHomeHandlerLimitsDefaultFeedToFirstPage(t *testing.T) {
+	db := openTestDB(t)
+
+	if err := database.CreateUser(db, "author@example.com", "author", "password"); err != nil {
+		t.Fatal(err)
+	}
+	user, err := database.GetUserByEmail(db, "author@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user == nil {
+		t.Fatal("user was not created")
+	}
+
+	for i := 1; i <= feedPageSize+1; i++ {
+		if _, err := db.Exec(
+			"INSERT INTO posts (author_id, title, content, created_at) VALUES (?, ?, ?, datetime('2026-01-01', ? || ' minutes'))",
+			user.ID,
+			"Post "+strconv.Itoa(i),
+			"Hello forum",
+			i,
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+
+	HomeHandler(db)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %q", w.Code, http.StatusOK, w.Body.String())
+	}
+	body := w.Body.String()
+	if strings.Contains(body, "<h3>Post 1</h3>") {
+		t.Fatalf("body contains oldest overflow post: %q", body)
+	}
+	if !strings.Contains(body, "<h3>Post 21</h3>") {
+		t.Fatalf("body = %q, want newest post", body)
+	}
+	if !strings.Contains(body, `href="/?page=2"`) {
+		t.Fatalf("body = %q, want next page link", body)
+	}
+}
+
+// TestHomeHandlerLimitsRenderedCommentsPerPost verifies one busy post cannot flood the feed.
+func TestHomeHandlerLimitsRenderedCommentsPerPost(t *testing.T) {
+	db := openTestDB(t)
+
+	if err := database.CreateUser(db, "author@example.com", "author", "password"); err != nil {
+		t.Fatal(err)
+	}
+	user, err := database.GetUserByEmail(db, "author@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user == nil {
+		t.Fatal("user was not created")
+	}
+	postID, err := database.CreatePost(db, user.ID, "First post", "Hello forum")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 1; i <= feedCommentPreviewLimit+1; i++ {
+		if _, err := db.Exec(
+			"INSERT INTO comments (author_id, post_id, content, created_at) VALUES (?, ?, ?, datetime('2026-01-01', ? || ' minutes'))",
+			user.ID,
+			postID,
+			"comment "+strconv.Itoa(i),
+			i,
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+
+	HomeHandler(db)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %q", w.Code, http.StatusOK, w.Body.String())
+	}
+	body := w.Body.String()
+	if strings.Contains(body, "<p>comment 1</p>") {
+		t.Fatalf("body contains oldest overflow comment: %q", body)
+	}
+	if !strings.Contains(body, "<p>comment 6</p>") {
+		t.Fatalf("body = %q, want newest comment", body)
 	}
 }
 

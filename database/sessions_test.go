@@ -51,7 +51,7 @@ func TestCreateSessionStoresExpiryAsSQLiteUTCTimestamp(t *testing.T) {
 	}
 
 	var stored string
-	if err := db.QueryRow("SELECT expires_at FROM sessions WHERE id = ?", "session").Scan(&stored); err != nil {
+	if err := db.QueryRow("SELECT datetime(expires_at) FROM sessions WHERE id = ?", "session").Scan(&stored); err != nil {
 		t.Fatal(err)
 	}
 	if stored != "2026-06-09 14:30:15" {
