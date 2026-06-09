@@ -5,7 +5,19 @@ import (
 	"forum/database"
 	"forum/handlers"
 	"net/http"
+	"time"
 )
+
+func newHTTPServer(addr string) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           http.DefaultServeMux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+}
 
 // main prepares the database-backed handlers and starts the HTTP server.
 func main() {
@@ -43,7 +55,8 @@ func main() {
 	// Print before ListenAndServe because it blocks until the server stops or fails.
 	fmt.Printf("Starting server on http://localhost%s\n", defaultPort)
 
-	err = http.ListenAndServe(defaultPort, nil)
+	server := newHTTPServer(defaultPort)
+	err = server.ListenAndServe()
 	if err != nil {
 		fmt.Println(err)
 	}
