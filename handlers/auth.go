@@ -102,9 +102,10 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 			// The database layer owns uniqueness enforcement through constraints.
 			err = database.CreateUser(db, email, username, string(hashedPassword))
 			if err != nil {
-				// Duplicate email or username values are reported by SQLite as constraint errors.
 				if isConstraintError(err) {
-					http.Error(w, "email or username is already taken", http.StatusConflict)
+					// Use the same public response as a successful registration so
+					// attackers cannot test whether an email or username exists.
+					http.Redirect(w, r, "/register", http.StatusSeeOther)
 					return
 				}
 

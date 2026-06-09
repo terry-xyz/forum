@@ -16,36 +16,45 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// TestRegisterHandlerRejectsDuplicateUser verifies duplicate account conflicts
-// produce a useful client-facing response.
-func TestRegisterHandlerRejectsDuplicateUser(t *testing.T) {
-	// Start with an existing user so the registration insert hits a UNIQUE constraint.
+// TestRegisterHandlerDoesNotRevealDuplicateUser verifies duplicate account
+// conflicts do not expose whether an email or username already exists.
+func TestRegisterHandlerDoesNotRevealDuplicateUser(t *testing.T) {
 	db := openTestDB(t)
 
 	if err := database.CreateUser(db, "user@example.com", "user", "password"); err != nil {
 		t.Fatal(err)
 	}
 
-	// Submit the same email and username through the handler.
-	form := url.Values{
+	newForm := url.Values{
+		"email":    {"new@example.com"},
+		"username": {"new-user"},
+		"password": {"password"},
+	}
+	newReq := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(newForm.Encode()))
+	newReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	newResponse := httptest.NewRecorder()
+
+	RegisterHandler(db)(newResponse, newReq)
+
+	duplicateForm := url.Values{
 		"email":    {"user@example.com"},
 		"username": {"user"},
 		"password": {"password"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	w := httptest.NewRecorder()
+	duplicateReq := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(duplicateForm.Encode()))
+	duplicateReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	duplicateResponse := httptest.NewRecorder()
 
-	RegisterHandler(db)(w, req)
+	RegisterHandler(db)(duplicateResponse, duplicateReq)
 
-	// Duplicate users should be reported as a conflict, not a generic 500.
-	if w.Code != http.StatusConflict {
-		t.Fatalf("status = %d, want %d", w.Code, http.StatusConflict)
+	if duplicateResponse.Code != newResponse.Code {
+		t.Fatalf("duplicate status = %d, want %d", duplicateResponse.Code, newResponse.Code)
 	}
-
-	// The body should explain that either unique field may already be taken.
-	if !strings.Contains(w.Body.String(), "email or username is already taken") {
-		t.Fatalf("body = %q, want duplicate-user message", w.Body.String())
+	if duplicateResponse.Header().Get("Location") != newResponse.Header().Get("Location") {
+		t.Fatalf("duplicate location = %q, want %q", duplicateResponse.Header().Get("Location"), newResponse.Header().Get("Location"))
+	}
+	if duplicateResponse.Body.String() != newResponse.Body.String() {
+		t.Fatalf("duplicate body = %q, want %q", duplicateResponse.Body.String(), newResponse.Body.String())
 	}
 }
 
