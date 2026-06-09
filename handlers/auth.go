@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"crypto/subtle"
 	"database/sql"
 	"errors"
 	"forum/database"
 	"forum/helpers"
+	"html"
 	"net/http"
 	"net/mail"
 	"strings"
@@ -14,7 +16,10 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const sessionCookieMaxAge = 60 * 60 * 24
+const (
+	sessionCookieMaxAge = 60 * 60 * 24
+	preAuthCSRFCookie   = "pre_auth_csrf"
+)
 
 func secureCookieForRequest(r *http.Request) bool {
 	if r.TLS != nil {
@@ -41,6 +46,38 @@ func secureCookieForRequest(r *http.Request) bool {
 	return false
 }
 
+func issuePreAuthCSRFToken(w http.ResponseWriter, r *http.Request) (string, error) {
+	token, err := helpers.GenerateSessionID()
+	if err != nil {
+		return "", err
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     preAuthCSRFCookie,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   secureCookieForRequest(r),
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	return token, nil
+}
+
+func validPreAuthCSRFToken(r *http.Request) bool {
+	cookie, err := r.Cookie(preAuthCSRFCookie)
+	if err != nil || cookie.Value == "" {
+		return false
+	}
+
+	submittedToken := r.PostForm.Get("csrf_token")
+	if submittedToken == "" || len(submittedToken) != len(cookie.Value) {
+		return false
+	}
+
+	return subtle.ConstantTimeCompare([]byte(submittedToken), []byte(cookie.Value)) == 1
+}
+
 // RegisterHandler serves the registration form and creates new user accounts.
 func RegisterHandler(db *sql.DB) http.HandlerFunc {
 
@@ -50,9 +87,16 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 
 		// GET renders the minimal registration form directly from the handler.
 		if r.Method == http.MethodGet {
+			csrfToken, err := issuePreAuthCSRFToken(w, r)
+			if err != nil {
+				http.Error(w, "unable to render form", http.StatusInternalServerError)
+				return
+			}
+
 			w.Header().Set("Content-Type", "text/html")
 			w.Write([]byte(`
 			<form method="POST" action="/register">
+				<input type="hidden" name="csrf_token" value="` + html.EscapeString(csrfToken) + `">
 				Email: <input type="email" name="email"><br>
 				Username: <input name="username"><br>
 				Password: <input type="password" name="password"><br>
@@ -64,6 +108,10 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 		// POST consumes submitted account details and attempts to persist them.
 		if r.Method == http.MethodPost {
 			if !parseLimitedForm(w, r) {
+				return
+			}
+			if !validPreAuthCSRFToken(r) {
+				http.Error(w, "invalid csrf token", http.StatusForbidden)
 				return
 			}
 
@@ -140,9 +188,16 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 
 		// GET presents the login form without touching the database.
 		if r.Method == http.MethodGet {
+			csrfToken, err := issuePreAuthCSRFToken(w, r)
+			if err != nil {
+				http.Error(w, "unable to render form", http.StatusInternalServerError)
+				return
+			}
+
 			w.Header().Set("Content-Type", "text/html")
 			w.Write([]byte(`
 			<form method="POST" action="/login">
+				<input type="hidden" name="csrf_token" value="` + html.EscapeString(csrfToken) + `">
 				Email: <input type="email" name="email"><br>
 				Password: <input type="password" name="password"><br>
 				<button type="submit">Login</button>
@@ -153,6 +208,10 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 		// POST validates submitted credentials against the users table.
 		if r.Method == http.MethodPost {
 			if !parseLimitedForm(w, r) {
+				return
+			}
+			if !validPreAuthCSRFToken(r) {
+				http.Error(w, "invalid csrf token", http.StatusForbidden)
 				return
 			}
 

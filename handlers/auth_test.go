@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"database/sql"
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +17,61 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// TestLoginHandlerRejectsMissingPreAuthCSRFToken verifies forged login POSTs
+// cannot be submitted without first loading the login form.
+func TestLoginHandlerRejectsMissingPreAuthCSRFToken(t *testing.T) {
+	db := openTestDB(t)
+
+	form := url.Values{
+		"email":    {"missing@example.com"},
+		"password": {"password"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+
+	LoginHandler(db)(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
+	}
+	if !strings.Contains(w.Body.String(), "invalid csrf token") {
+		t.Fatalf("body = %q, want invalid csrf token message", w.Body.String())
+	}
+}
+
+// TestRegisterHandlerRejectsMissingPreAuthCSRFToken verifies forged register
+// POSTs cannot create accounts without first loading the registration form.
+func TestRegisterHandlerRejectsMissingPreAuthCSRFToken(t *testing.T) {
+	db := openTestDB(t)
+
+	form := url.Values{
+		"email":    {"user@example.com"},
+		"username": {"user"},
+		"password": {"password"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+
+	RegisterHandler(db)(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
+	}
+	if !strings.Contains(w.Body.String(), "invalid csrf token") {
+		t.Fatalf("body = %q, want invalid csrf token message", w.Body.String())
+	}
+
+	user, err := database.GetUserByEmail(db, "user@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user != nil {
+		t.Fatal("registration created a user without a csrf token")
+	}
+}
 
 // TestRegisterHandlerDoesNotRevealDuplicateUser verifies duplicate account
 // conflicts do not expose whether an email or username already exists.
@@ -30,8 +87,7 @@ func TestRegisterHandlerDoesNotRevealDuplicateUser(t *testing.T) {
 		"username": {"new-user"},
 		"password": {"password"},
 	}
-	newReq := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(newForm.Encode()))
-	newReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	newReq := newPreAuthPostRequest(t, RegisterHandler(db), "/register", newForm)
 	newResponse := httptest.NewRecorder()
 
 	RegisterHandler(db)(newResponse, newReq)
@@ -41,8 +97,7 @@ func TestRegisterHandlerDoesNotRevealDuplicateUser(t *testing.T) {
 		"username": {"user"},
 		"password": {"password"},
 	}
-	duplicateReq := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(duplicateForm.Encode()))
-	duplicateReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	duplicateReq := newPreAuthPostRequest(t, RegisterHandler(db), "/register", duplicateForm)
 	duplicateResponse := httptest.NewRecorder()
 
 	RegisterHandler(db)(duplicateResponse, duplicateReq)
@@ -99,8 +154,7 @@ func TestRegisterHandlerRejectsInvalidRequiredFields(t *testing.T) {
 				"username": {tt.user},
 				"password": {tt.pass},
 			}
-			req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(form.Encode()))
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req := newPreAuthPostRequest(t, RegisterHandler(db), "/register", form)
 			w := httptest.NewRecorder()
 
 			RegisterHandler(db)(w, req)
@@ -137,8 +191,7 @@ func TestLoginHandlerRejectsUnknownEmail(t *testing.T) {
 		"email":    {"missing@example.com"},
 		"password": {"password"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req := newPreAuthPostRequest(t, LoginHandler(db), "/login", form)
 	w := httptest.NewRecorder()
 
 	LoginHandler(db)(w, req)
@@ -168,8 +221,7 @@ func TestLoginHandlerRejectsWrongPassword(t *testing.T) {
 		"email":    {"user@example.com"},
 		"password": {"wrong-password"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req := newPreAuthPostRequest(t, LoginHandler(db), "/login", form)
 	w := httptest.NewRecorder()
 
 	LoginHandler(db)(w, req)
@@ -199,8 +251,7 @@ func TestLoginHandlerSetsSessionCookie(t *testing.T) {
 		"email":    {"user@example.com"},
 		"password": {"password"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req := newPreAuthPostRequest(t, LoginHandler(db), "/login", form)
 	w := httptest.NewRecorder()
 
 	LoginHandler(db)(w, req)
@@ -262,8 +313,7 @@ func TestLoginHandlerSetsSecureCookieForHTTPS(t *testing.T) {
 		"email":    {"user@example.com"},
 		"password": {"password"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "https://example.com/login", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req := newPreAuthPostRequest(t, LoginHandler(db), "https://example.com/login", form)
 	w := httptest.NewRecorder()
 
 	LoginHandler(db)(w, req)
@@ -301,8 +351,7 @@ func TestLoginHandlerInvalidatesPreviousSessions(t *testing.T) {
 		"email":    {"user@example.com"},
 		"password": {"password"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req := newPreAuthPostRequest(t, LoginHandler(db), "/login", form)
 	w := httptest.NewRecorder()
 
 	LoginHandler(db)(w, req)
@@ -468,6 +517,61 @@ func TestLogoutHandlerDeletesServerSession(t *testing.T) {
 	if userID != 0 {
 		t.Fatalf("session user id after logout = %d, want 0", userID)
 	}
+}
+
+// newPreAuthPostRequest simulates a browser loading a pre-auth form and then
+// submitting its hidden csrf_token field with the matching cookie.
+func newPreAuthPostRequest(t *testing.T, handler http.HandlerFunc, target string, form url.Values) *http.Request {
+	t.Helper()
+
+	getReq := httptest.NewRequest(http.MethodGet, target, nil)
+	getResponse := httptest.NewRecorder()
+
+	handler(getResponse, getReq)
+
+	if getResponse.Code != http.StatusOK {
+		t.Fatalf("GET %s status = %d, want %d", target, getResponse.Code, http.StatusOK)
+	}
+
+	cookie := preAuthCSRFCookieForTest(t, getResponse)
+	token := preAuthCSRFTokenForTest(t, getResponse.Body.String())
+	if cookie.Value != token {
+		t.Fatalf("csrf cookie = %q, hidden token = %q", cookie.Value, token)
+	}
+
+	form.Set("csrf_token", token)
+	req := httptest.NewRequest(http.MethodPost, target, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(cookie)
+
+	return req
+}
+
+func preAuthCSRFCookieForTest(t *testing.T, response *httptest.ResponseRecorder) *http.Cookie {
+	t.Helper()
+
+	for _, cookie := range response.Result().Cookies() {
+		if cookie.Name == preAuthCSRFCookie {
+			if cookie.Value == "" {
+				t.Fatal("pre-auth csrf cookie value is empty")
+			}
+			return cookie
+		}
+	}
+
+	t.Fatalf("missing %s cookie", preAuthCSRFCookie)
+	return nil
+}
+
+func preAuthCSRFTokenForTest(t *testing.T, body string) string {
+	t.Helper()
+
+	matches := regexp.MustCompile(`name="csrf_token"\s+value="([^"]+)"`).FindStringSubmatch(body)
+	if len(matches) != 2 {
+		t.Fatalf("body = %q, want hidden csrf token", body)
+	}
+
+	return html.UnescapeString(matches[1])
 }
 
 // openTestDB creates a temporary handlers test database from the shared schema.
