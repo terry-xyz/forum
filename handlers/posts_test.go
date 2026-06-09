@@ -281,6 +281,51 @@ func TestCreatePostHandlerRejectsOversizedRequestBody(t *testing.T) {
 	}
 }
 
+func TestCreatePostHandlerRejectsUnknownCategoryIDWithoutCreatingPost(t *testing.T) {
+	db := openTestDB(t)
+
+	if err := database.CreateUser(db, "author@example.com", "author", "password"); err != nil {
+		t.Fatal(err)
+	}
+	user, err := database.GetUserByEmail(db, "author@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user == nil {
+		t.Fatal("user was not created")
+	}
+	sessionID := createSessionForUserID(t, db, "create-post-session", user.ID)
+	csrfToken := csrfTokenForTest(t, db, sessionID)
+
+	form := url.Values{
+		"title":        {"First post"},
+		"content":      {"Hello forum"},
+		"category_ids": {"999"},
+		"csrf_token":   {csrfToken},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/create-post", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "session", Value: sessionID})
+	w := httptest.NewRecorder()
+
+	CreatePostHandler(db)(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d; body = %q", w.Code, http.StatusBadRequest, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "invalid category id") {
+		t.Fatalf("body = %q, want invalid category id message", w.Body.String())
+	}
+
+	posts, err := database.GetAllPosts(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(posts) != 0 {
+		t.Fatalf("posts = %d, want 0", len(posts))
+	}
+}
+
 // TestCreatePostHandlerRejectsMissingCSRFToken verifies a valid session alone is not enough for writes.
 func TestCreatePostHandlerRejectsMissingCSRFToken(t *testing.T) {
 	db := openTestDB(t)

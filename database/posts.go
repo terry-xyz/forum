@@ -2,8 +2,11 @@ package database
 
 import (
 	"database/sql"
+	"errors"
 	"forum/models"
 )
+
+var ErrInvalidCategoryID = errors.New("invalid category id")
 
 // CreatePost inserts a post owned by an existing user.
 func CreatePost(db *sql.DB, authorID int, title string, content string) (int, error) {
@@ -20,6 +23,69 @@ func CreatePost(db *sql.DB, authorID int, title string, content string) (int, er
 	insertedID, err := result.LastInsertId()
 
 	return int(insertedID), nil
+}
+
+// CreatePostWithCategories inserts a post and its category links atomically.
+func CreatePostWithCategories(db *sql.DB, authorID int, title string, content string, categoryIDs []int) (int, error) {
+	uniqueCategoryIDs, ok := uniquePositiveInts(categoryIDs)
+	if !ok || len(uniqueCategoryIDs) == 0 {
+		return 0, ErrInvalidCategoryID
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	for _, categoryID := range uniqueCategoryIDs {
+		var exists int
+		if err := tx.QueryRow("SELECT COUNT(*) FROM categories WHERE id = ?", categoryID).Scan(&exists); err != nil {
+			return 0, err
+		}
+		if exists == 0 {
+			return 0, ErrInvalidCategoryID
+		}
+	}
+
+	result, err := tx.Exec("INSERT INTO posts (author_id, title, content) VALUES (?, ?, ?)", authorID, title, content)
+	if err != nil {
+		return 0, err
+	}
+	insertedID, err := result.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+
+	for _, categoryID := range uniqueCategoryIDs {
+		_, err := tx.Exec("INSERT INTO post_categories (post_id, category_id) VALUES (?, ?)", insertedID, categoryID)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+
+	return int(insertedID), nil
+}
+
+func uniquePositiveInts(ids []int) ([]int, bool) {
+	seen := make(map[int]struct{}, len(ids))
+	uniqueIDs := make([]int, 0, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			return nil, false
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		uniqueIDs = append(uniqueIDs, id)
+	}
+
+	return uniqueIDs, true
 }
 
 // GetAllPosts returns every post in database order.

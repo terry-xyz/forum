@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"errors"
 	"forum/database"
 	"html"
 	"net/http"
@@ -127,16 +128,14 @@ func CreatePostHandler(db *sql.DB) http.HandlerFunc {
 				return
 			}
 
-			// Insert the post first so its generated ID can be used in post_categories.
-			postID, err := database.CreatePost(db, id, title, content)
+			// Insert the post and its category links together so failed category
+			// validation cannot leave an uncategorized post behind.
+			_, err := database.CreatePostWithCategories(db, id, title, content, categoryIDs)
 			if err != nil {
-				http.Error(w, "unable to create post", http.StatusInternalServerError)
-				return
-			}
-
-			// Add the selected category relationships after the post exists.
-			err = database.AddCategoriesToPost(db, postID, categoryIDs)
-			if err != nil {
+				if errors.Is(err, database.ErrInvalidCategoryID) {
+					http.Error(w, "invalid category id", http.StatusBadRequest)
+					return
+				}
 				http.Error(w, "internal server error", http.StatusInternalServerError)
 				return
 			}
