@@ -18,6 +18,32 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+func TestAuthFormsUseSharedPageAssets(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		handler func(*sql.DB) http.HandlerFunc
+	}{
+		{name: "register", path: "/register", handler: RegisterHandler},
+		{name: "login", path: "/login", handler: LoginHandler},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := openTestDB(t)
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			w := httptest.NewRecorder()
+
+			tt.handler(db)(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d; body = %q", w.Code, http.StatusOK, w.Body.String())
+			}
+			assertSharedPageAssets(t, w.Body.String())
+		})
+	}
+}
+
 // TestLoginHandlerRejectsMissingPreAuthCSRFToken verifies forged login POSTs
 // cannot be submitted without first loading the login form.
 func TestLoginHandlerRejectsMissingPreAuthCSRFToken(t *testing.T) {

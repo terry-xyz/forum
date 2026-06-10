@@ -52,29 +52,29 @@ func CreatePostHandler(db *sql.DB) http.HandlerFunc {
 				return
 			}
 
-			// The handler writes simple HTML directly instead of using templates.
-			w.Header().Set("Content-Type", "text/html")
-			w.Write([]byte(`
+			var form strings.Builder
+			form.WriteString(`
 			<form method="POST" action="/create-post">
 				<input type="hidden" name="csrf_token" value="` + html.EscapeString(csrfToken) + `">
-				Title: <input name="title"><br>
-				Content:
-				<textarea name="content"></textarea><br>
-				Categories:<br>
-			`))
+				<label>Title <input name="title"></label>
+				<label>Content <textarea name="content"></textarea></label>
+				<fieldset>
+					<legend>Categories</legend>
+			`)
 			// Each category becomes one checkbox sharing the category_ids field name.
 			for _, c := range categories {
-				w.Write([]byte(`
+				form.WriteString(`
 				<label>
 					<input type="checkbox" name="category_ids" value="` + strconv.Itoa(c.ID) + `">` + html.EscapeString(c.Name) +
-					`</label><br>`,
-				))
+					`</label>`)
 			}
 			// Close the form after all dynamic checkbox rows have been written.
-			w.Write([]byte(`
+			form.WriteString(`
+				</fieldset>
 				<button type="submit">Create Post</button>
 			</form>
-			`))
+			`)
+			renderFormPage(w, "Create post", form.String())
 			return
 		}
 

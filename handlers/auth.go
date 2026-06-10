@@ -93,15 +93,14 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 				return
 			}
 
-			w.Header().Set("Content-Type", "text/html")
-			w.Write([]byte(`
+			renderFormPage(w, "Register", `
 			<form method="POST" action="/register">
-				<input type="hidden" name="csrf_token" value="` + html.EscapeString(csrfToken) + `">
-				Email: <input type="email" name="email"><br>
-				Username: <input name="username"><br>
-				Password: <input type="password" name="password"><br>
+				<input type="hidden" name="csrf_token" value="`+html.EscapeString(csrfToken)+`">
+				<label>Email <input type="email" name="email"></label>
+				<label>Username <input name="username"></label>
+				<label>Password <input type="password" name="password"></label>
 				<button type="submit">Register</button>
-			</form>`))
+			</form>`)
 			return
 		}
 
@@ -194,14 +193,13 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 				return
 			}
 
-			w.Header().Set("Content-Type", "text/html")
-			w.Write([]byte(`
+			renderFormPage(w, "Login", `
 			<form method="POST" action="/login">
-				<input type="hidden" name="csrf_token" value="` + html.EscapeString(csrfToken) + `">
-				Email: <input type="email" name="email"><br>
-				Password: <input type="password" name="password"><br>
+				<input type="hidden" name="csrf_token" value="`+html.EscapeString(csrfToken)+`">
+				<label>Email <input type="email" name="email"></label>
+				<label>Password <input type="password" name="password"></label>
 				<button type="submit">Login</button>
-			</form>`))
+			</form>`)
 			return
 		}
 

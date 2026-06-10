@@ -62,6 +62,33 @@ func TestCreatePostHandlerCreatesPost(t *testing.T) {
 	}
 }
 
+func TestCreatePostFormUsesSharedPageAssets(t *testing.T) {
+	db := openTestDB(t)
+
+	if err := database.CreateUser(db, "author@example.com", "author", "password"); err != nil {
+		t.Fatal(err)
+	}
+	user, err := database.GetUserByEmail(db, "author@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user == nil {
+		t.Fatal("user was not created")
+	}
+	sessionID := createSessionForUserID(t, db, "create-post-assets-session", user.ID)
+
+	req := httptest.NewRequest(http.MethodGet, "/create-post", nil)
+	req.AddCookie(&http.Cookie{Name: "session", Value: sessionID})
+	w := httptest.NewRecorder()
+
+	CreatePostHandler(db)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %q", w.Code, http.StatusOK, w.Body.String())
+	}
+	assertSharedPageAssets(t, w.Body.String())
+}
+
 // TestCreatePostHandlerEscapesCategoryNames verifies category labels cannot inject HTML.
 func TestCreatePostHandlerEscapesCategoryNames(t *testing.T) {
 	db := openTestDB(t)
