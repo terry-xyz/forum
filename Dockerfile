@@ -16,6 +16,7 @@ WORKDIR /app
 
 COPY --from=builder --chown=10001:10001 /app/forum .
 COPY --from=builder --chown=10001:10001 /app/database/schema.sql database/schema.sql
+COPY --from=builder --chown=10001:10001 /app/static static
 
 RUN chmod 0755 /app/forum && chown -R 10001:10001 /app
 

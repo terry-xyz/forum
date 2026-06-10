@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -48,7 +49,7 @@ func TestConfiguredDatabasePathUsesEnvironment(t *testing.T) {
 }
 
 func TestNewHTTPServerConfiguresTimeouts(t *testing.T) {
-	server := newHTTPServer(":0")
+	server := newHTTPServer(":0", http.NewServeMux())
 
 	if server.ReadHeaderTimeout != 5*time.Second {
 		t.Fatalf("ReadHeaderTimeout = %s, want 5s", server.ReadHeaderTimeout)
@@ -65,7 +66,7 @@ func TestNewHTTPServerConfiguresTimeouts(t *testing.T) {
 }
 
 func TestNewHTTPServerAddsSecurityHeaders(t *testing.T) {
-	server := newHTTPServer(":0")
+	server := newHTTPServer(":0", http.NewServeMux())
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
@@ -82,6 +83,36 @@ func TestNewHTTPServerAddsSecurityHeaders(t *testing.T) {
 	for name, want := range wantHeaders {
 		if got := headers.Get(name); got != want {
 			t.Fatalf("%s = %q, want %q", name, got, want)
+		}
+	}
+}
+
+func TestNewHTTPServerServesStaticAssets(t *testing.T) {
+	mux := newAppMux()
+	server := newHTTPServer(":0", mux)
+
+	tests := []struct {
+		path        string
+		contentType string
+	}{
+		{path: "/static/style.css", contentType: "text/css"},
+		{path: "/static/theme.js", contentType: "text/javascript"},
+	}
+
+	for _, tt := range tests {
+		req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+		w := httptest.NewRecorder()
+
+		server.Handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET %s status = %d, want %d", tt.path, w.Code, http.StatusOK)
+		}
+		if got := w.Result().Header.Get("Content-Type"); !strings.Contains(got, tt.contentType) {
+			t.Fatalf("GET %s Content-Type = %q, want %s content type", tt.path, got, tt.contentType)
+		}
+		if got := w.Result().Header.Get("Content-Security-Policy"); got != contentSecurityPolicy {
+			t.Fatalf("GET %s CSP = %q, want %q", tt.path, got, contentSecurityPolicy)
 		}
 	}
 }
