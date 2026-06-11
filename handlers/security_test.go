@@ -19,6 +19,7 @@ func TestParseLimitedFormRejectsUnsupportedContentType(t *testing.T) {
 	if w.Code != http.StatusUnsupportedMediaType {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusUnsupportedMediaType)
 	}
+	assertStyledErrorPage(t, w.Body.String(), "unsupported content type")
 }
 
 func TestValidCSRFTokenRejectsTokenProvidedOnlyInQuery(t *testing.T) {

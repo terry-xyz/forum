@@ -48,6 +48,7 @@ func TestMutatingHandlersRejectMissingCSRFToken(t *testing.T) {
 			if w.Code != http.StatusForbidden {
 				t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
 			}
+			assertStyledErrorPage(t, w.Body.String(), "invalid csrf token")
 		})
 	}
 }

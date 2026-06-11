@@ -110,7 +110,7 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 		if r.Method == http.MethodGet {
 			csrfToken, err := issuePreAuthCSRFToken(w, r)
 			if err != nil {
-				http.Error(w, "unable to render form", http.StatusInternalServerError)
+				renderHTTPError(w, http.StatusInternalServerError, "unable to render form")
 				return
 			}
 
@@ -124,7 +124,7 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 				return
 			}
 			if !validPreAuthCSRFToken(r) {
-				http.Error(w, "invalid csrf token", http.StatusForbidden)
+				renderHTTPError(w, http.StatusForbidden, "invalid csrf token")
 				return
 			}
 
@@ -156,7 +156,7 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 			// Store only a bcrypt hash so a database leak does not expose raw passwords.
 			hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 			if err != nil {
-				http.Error(w, "unable to create user", http.StatusInternalServerError)
+				renderHTTPError(w, http.StatusInternalServerError, "unable to create user")
 				return
 			}
 
@@ -170,7 +170,7 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 					return
 				}
 
-				http.Error(w, "unable to create user", http.StatusInternalServerError)
+				renderHTTPError(w, http.StatusInternalServerError, "unable to create user")
 				return
 			}
 
@@ -181,7 +181,7 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		// Any method outside the two supported branches is rejected explicitly.
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		renderHTTPError(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
 }
 
@@ -203,7 +203,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 		if r.Method == http.MethodGet {
 			csrfToken, err := issuePreAuthCSRFToken(w, r)
 			if err != nil {
-				http.Error(w, "unable to render form", http.StatusInternalServerError)
+				renderHTTPError(w, http.StatusInternalServerError, "unable to render form")
 				return
 			}
 
@@ -217,7 +217,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 				return
 			}
 			if !validPreAuthCSRFToken(r) {
-				http.Error(w, "invalid csrf token", http.StatusForbidden)
+				renderHTTPError(w, http.StatusForbidden, "invalid csrf token")
 				return
 			}
 
@@ -240,7 +240,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 			// Lookup by email first because email is the login identifier.
 			user, err := database.GetUserByEmail(db, email)
 			if err != nil {
-				http.Error(w, "unable to log in", http.StatusInternalServerError)
+				renderHTTPError(w, http.StatusInternalServerError, "unable to log in")
 				return
 			}
 
@@ -261,18 +261,18 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 
 			err = database.DeleteSessionsByUserID(db, user.ID)
 			if err != nil {
-				http.Error(w, "unable to create session", http.StatusInternalServerError)
+				renderHTTPError(w, http.StatusInternalServerError, "unable to create session")
 				return
 			}
 
 			sessionID, err := helpers.GenerateSessionID()
 			if err != nil {
-				http.Error(w, "unable to create session", http.StatusInternalServerError)
+				renderHTTPError(w, http.StatusInternalServerError, "unable to create session")
 				return
 			}
 			csrfToken, err := helpers.GenerateSessionID()
 			if err != nil {
-				http.Error(w, "unable to create session", http.StatusInternalServerError)
+				renderHTTPError(w, http.StatusInternalServerError, "unable to create session")
 				return
 			}
 
@@ -280,7 +280,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 
 			err = database.CreateSession(db, sessionID, user.ID, csrfToken, expiresAt)
 			if err != nil {
-				http.Error(w, "unable to create session", http.StatusInternalServerError)
+				renderHTTPError(w, http.StatusInternalServerError, "unable to create session")
 				return
 			}
 
@@ -301,7 +301,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		// Login only supports rendering and submitting the form.
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		renderHTTPError(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
 }
 
@@ -310,13 +310,13 @@ func LogoutHandler(db *sql.DB) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			renderHTTPError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
 
 		cookie, err := r.Cookie("session")
 		if err != nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			renderHTTPError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 
@@ -324,12 +324,12 @@ func LogoutHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 		if !validCSRFToken(db, r, cookie.Value) {
-			http.Error(w, "invalid csrf token", http.StatusForbidden)
+			renderHTTPError(w, http.StatusForbidden, "invalid csrf token")
 			return
 		}
 
 		if err := database.DeleteSession(db, cookie.Value); err != nil {
-			http.Error(w, "unable to log out", http.StatusInternalServerError)
+			renderHTTPError(w, http.StatusInternalServerError, "unable to log out")
 			return
 		}
 

@@ -65,6 +65,7 @@ func TestLoginHandlerRejectsMissingPreAuthCSRFToken(t *testing.T) {
 	if !strings.Contains(w.Body.String(), "invalid csrf token") {
 		t.Fatalf("body = %q, want invalid csrf token message", w.Body.String())
 	}
+	assertStyledErrorPage(t, w.Body.String(), "invalid csrf token")
 }
 
 // TestRegisterHandlerRejectsMissingPreAuthCSRFToken verifies forged register
@@ -89,6 +90,7 @@ func TestRegisterHandlerRejectsMissingPreAuthCSRFToken(t *testing.T) {
 	if !strings.Contains(w.Body.String(), "invalid csrf token") {
 		t.Fatalf("body = %q, want invalid csrf token message", w.Body.String())
 	}
+	assertStyledErrorPage(t, w.Body.String(), "invalid csrf token")
 
 	user, err := database.GetUserByEmail(db, "user@example.com")
 	if err != nil {
@@ -436,6 +438,7 @@ func TestLogoutHandlerRejectsGET(t *testing.T) {
 	if w.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusMethodNotAllowed)
 	}
+	assertStyledErrorPage(t, w.Body.String(), "method not allowed")
 }
 
 // TestLogoutHandlerRejectsMissingCSRFToken verifies a session cookie alone cannot log out.
@@ -453,6 +456,7 @@ func TestLogoutHandlerRejectsMissingCSRFToken(t *testing.T) {
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
 	}
+	assertStyledErrorPage(t, w.Body.String(), "invalid csrf token")
 	userID, err := database.GetUserIDBySessionID(db, sessionID)
 	if err != nil {
 		t.Fatal(err)

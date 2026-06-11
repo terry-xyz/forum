@@ -21,7 +21,7 @@ const (
 func parseLimitedForm(w http.ResponseWriter, r *http.Request) bool {
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || mediaType != "application/x-www-form-urlencoded" {
-		http.Error(w, "unsupported content type", http.StatusUnsupportedMediaType)
+		renderHTTPError(w, http.StatusUnsupportedMediaType, "unsupported content type")
 		return false
 	}
 
@@ -30,11 +30,11 @@ func parseLimitedForm(w http.ResponseWriter, r *http.Request) bool {
 	if err := r.ParseForm(); err != nil {
 		var maxBytesErr *http.MaxBytesError
 		if errors.As(err, &maxBytesErr) {
-			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+			renderHTTPError(w, http.StatusRequestEntityTooLarge, "request body too large")
 			return false
 		}
 
-		http.Error(w, "bad form data", http.StatusBadRequest)
+		renderHTTPError(w, http.StatusBadRequest, "bad form data")
 		return false
 	}
 
