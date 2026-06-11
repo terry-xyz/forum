@@ -197,6 +197,16 @@ input:focus-visible {
 	letter-spacing: 0;
 }
 
+.form-alert {
+	margin: 0 0 1rem;
+	border: 1px solid color-mix(in srgb, var(--danger) 58%, var(--border));
+	border-radius: var(--radius);
+	padding: 0.8rem 0.9rem;
+	background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+	color: var(--danger-strong);
+	font-weight: 650;
+}
+
 .empty-message {
 	padding: 1.25rem;
 	color: var(--muted);
@@ -405,6 +415,64 @@ button:active {
 .pagination a {
 	background: var(--surface);
 	box-shadow: var(--shadow);
+}
+
+.error-page {
+	display: grid;
+	min-height: min(32rem, calc(100vh - 8rem));
+	place-items: center;
+}
+
+.error-card {
+	width: min(100%, 34rem);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	padding: clamp(1.25rem, 4vw, 2rem);
+	background: var(--surface);
+	box-shadow: var(--shadow);
+	text-align: center;
+}
+
+.error-code {
+	margin: 0 0 0.6rem;
+	color: var(--danger);
+	font-weight: 800;
+	text-transform: uppercase;
+}
+
+.error-card h1 {
+	margin: 0 0 0.75rem;
+	font-size: clamp(1.6rem, 4vw, 2.35rem);
+	line-height: 1.15;
+	letter-spacing: 0;
+}
+
+.error-card p {
+	margin: 0.65rem 0;
+	color: var(--muted);
+}
+
+.error-action {
+	display: inline-flex;
+	min-height: 2.35rem;
+	align-items: center;
+	justify-content: center;
+	margin-top: 0.9rem;
+	border: 1px solid var(--accent);
+	border-radius: var(--radius);
+	padding: 0.45rem 0.85rem;
+	background: var(--accent);
+	color: var(--surface);
+	font-weight: 650;
+	line-height: 1;
+	text-decoration: none;
+}
+
+.error-action:hover {
+	border-color: var(--accent-strong);
+	background: var(--accent-strong);
+	color: var(--surface);
+	transform: translateY(-1px);
 }
 
 @keyframes rise-in {
