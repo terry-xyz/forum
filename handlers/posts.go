@@ -51,7 +51,7 @@ func renderCreatePostFormPage(w http.ResponseWriter, db *sql.DB, csrfToken strin
 	// the schema seed data.
 	categories, err := database.GetAllCategories(db)
 	if err != nil {
-		http.Error(w, "unable to fetch categories", http.StatusInternalServerError)
+		renderHTTPError(w, http.StatusInternalServerError, "unable to fetch categories")
 		return false
 	}
 
@@ -68,26 +68,26 @@ func CreatePostHandler(db *sql.DB) http.HandlerFunc {
 		// Creating or viewing the post form requires a session.
 		cookie, err := r.Cookie("session")
 		if err != nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			renderHTTPError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 		// Resolve the opaque session token into the post author ID.
 		id, err := database.GetUserIDBySessionID(db, cookie.Value)
 		if err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			renderHTTPError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		if id == 0 {
-			http.Error(w, "invalid session", http.StatusUnauthorized)
+			renderHTTPError(w, http.StatusUnauthorized, "invalid session")
 			return
 		}
 		csrfToken, err := database.GetCSRFTokenBySessionID(db, cookie.Value)
 		if err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			renderHTTPError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		if csrfToken == "" {
-			http.Error(w, "invalid session", http.StatusUnauthorized)
+			renderHTTPError(w, http.StatusUnauthorized, "invalid session")
 			return
 		}
 
@@ -103,7 +103,7 @@ func CreatePostHandler(db *sql.DB) http.HandlerFunc {
 				return
 			}
 			if !validCSRFToken(db, r, cookie.Value) {
-				http.Error(w, "invalid csrf token", http.StatusForbidden)
+				renderHTTPError(w, http.StatusForbidden, "invalid csrf token")
 				return
 			}
 
@@ -136,7 +136,7 @@ func CreatePostHandler(db *sql.DB) http.HandlerFunc {
 			for _, c := range categoryIDStrs {
 				categoryID, err := strconv.Atoi(c)
 				if err != nil {
-					http.Error(w, "invalid category id", http.StatusBadRequest)
+					renderHTTPError(w, http.StatusBadRequest, "invalid category id")
 					return
 				}
 
@@ -154,10 +154,10 @@ func CreatePostHandler(db *sql.DB) http.HandlerFunc {
 			_, err := database.CreatePostWithCategories(db, id, title, content, categoryIDs)
 			if err != nil {
 				if errors.Is(err, database.ErrInvalidCategoryID) {
-					http.Error(w, "invalid category id", http.StatusBadRequest)
+					renderHTTPError(w, http.StatusBadRequest, "invalid category id")
 					return
 				}
-				http.Error(w, "internal server error", http.StatusInternalServerError)
+				renderHTTPError(w, http.StatusInternalServerError, "internal server error")
 				return
 			}
 
@@ -167,7 +167,7 @@ func CreatePostHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		// Only GET and POST make sense for the post creation endpoint.
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		renderHTTPError(w, http.StatusMethodNotAllowed, "method not allowed")
 
 	}
 }
@@ -179,31 +179,31 @@ func MyPostsHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// The filtered list is read-only, so non-GET methods are rejected early.
 		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			renderHTTPError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
 
 		// The session cookie identifies which author's posts should be listed.
 		cookie, err := r.Cookie("session")
 		if err != nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			renderHTTPError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 
 		// Resolve the opaque session token before using it in the author filter.
 		userID, err := database.GetUserIDBySessionID(db, cookie.Value)
 		if err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			renderHTTPError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		if userID == 0 {
-			http.Error(w, "invalid session", http.StatusUnauthorized)
+			renderHTTPError(w, http.StatusUnauthorized, "invalid session")
 			return
 		}
 
 		page, err := parsePage(r)
 		if err != nil {
-			http.Error(w, "invalid page", http.StatusBadRequest)
+			renderHTTPError(w, http.StatusBadRequest, "invalid page")
 			return
 		}
 		offset := (page - 1) * feedPageSize
@@ -211,18 +211,18 @@ func MyPostsHandler(db *sql.DB) http.HandlerFunc {
 		// Query by author_id so the page shows only posts owned by this user.
 		posts, err := database.GetPostsByAuthorIDPage(db, userID, feedPageSize+1, offset)
 		if err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			renderHTTPError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		posts, hasNext := trimPage(posts)
 
 		currentUser, err := database.GetUserByID(db, userID)
 		if err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			renderHTTPError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		if currentUser == nil {
-			http.Error(w, "invalid session", http.StatusUnauthorized)
+			renderHTTPError(w, http.StatusUnauthorized, "invalid session")
 			return
 		}
 
@@ -233,16 +233,16 @@ func MyPostsHandler(db *sql.DB) http.HandlerFunc {
 		}
 		csrfToken, err := database.GetCSRFTokenBySessionID(db, cookie.Value)
 		if err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			renderHTTPError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		if csrfToken == "" {
-			http.Error(w, "invalid session", http.StatusUnauthorized)
+			renderHTTPError(w, http.StatusUnauthorized, "invalid session")
 			return
 		}
 
-		if err := renderHomePage(w, db, posts, currentUser, emptyMessage, csrfToken, paginationForRequest(r, page, hasNext)); err != nil {
-			http.Error(w, "failed to render posts", http.StatusInternalServerError)
+		if err := renderHomePage(w, db, posts, currentUser, emptyMessage, csrfToken, paginationForRequest(r, page, hasNext), 0, ""); err != nil {
+			renderHTTPError(w, http.StatusInternalServerError, "failed to render posts")
 			return
 		}
 	}
@@ -255,31 +255,31 @@ func LikedPostsHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// The liked-posts page only reads data, so it accepts GET requests only.
 		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			renderHTTPError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
 
 		// The session cookie identifies which user's reaction rows should be used.
 		cookie, err := r.Cookie("session")
 		if err != nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			renderHTTPError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 
 		// Invalid cookie values cannot safely join against reaction user IDs.
 		userID, err := database.GetUserIDBySessionID(db, cookie.Value)
 		if err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			renderHTTPError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		if userID == 0 {
-			http.Error(w, "invalid session", http.StatusUnauthorized)
+			renderHTTPError(w, http.StatusUnauthorized, "invalid session")
 			return
 		}
 
 		page, err := parsePage(r)
 		if err != nil {
-			http.Error(w, "invalid page", http.StatusBadRequest)
+			renderHTTPError(w, http.StatusBadRequest, "invalid page")
 			return
 		}
 		offset := (page - 1) * feedPageSize
@@ -287,18 +287,18 @@ func LikedPostsHandler(db *sql.DB) http.HandlerFunc {
 		// Join through post_reactions so only posts this user liked are returned.
 		posts, err := database.GetLikedPostsByUserIDPage(db, userID, feedPageSize+1, offset)
 		if err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			renderHTTPError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		posts, hasNext := trimPage(posts)
 
 		currentUser, err := database.GetUserByID(db, userID)
 		if err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			renderHTTPError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		if currentUser == nil {
-			http.Error(w, "invalid session", http.StatusUnauthorized)
+			renderHTTPError(w, http.StatusUnauthorized, "invalid session")
 			return
 		}
 
@@ -309,16 +309,16 @@ func LikedPostsHandler(db *sql.DB) http.HandlerFunc {
 		}
 		csrfToken, err := database.GetCSRFTokenBySessionID(db, cookie.Value)
 		if err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			renderHTTPError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		if csrfToken == "" {
-			http.Error(w, "invalid session", http.StatusUnauthorized)
+			renderHTTPError(w, http.StatusUnauthorized, "invalid session")
 			return
 		}
 
-		if err := renderHomePage(w, db, posts, currentUser, emptyMessage, csrfToken, paginationForRequest(r, page, hasNext)); err != nil {
-			http.Error(w, "failed to render posts", http.StatusInternalServerError)
+		if err := renderHomePage(w, db, posts, currentUser, emptyMessage, csrfToken, paginationForRequest(r, page, hasNext), 0, ""); err != nil {
+			renderHTTPError(w, http.StatusInternalServerError, "failed to render posts")
 			return
 		}
 	}
@@ -331,32 +331,32 @@ func DeletePostHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Deletes come from rendered forms, so this endpoint only accepts POST.
 		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			renderHTTPError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
 
 		// A session is required because the delete query checks the post author.
 		cookie, err := r.Cookie("session")
 		if err != nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			renderHTTPError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 
 		// Resolve the session into the user ID used by the ownership check.
 		userID, err := database.GetUserIDBySessionID(db, cookie.Value)
 		if err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			renderHTTPError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		if userID == 0 {
-			http.Error(w, "invalid session", http.StatusUnauthorized)
+			renderHTTPError(w, http.StatusUnauthorized, "invalid session")
 			return
 		}
 		if !parseLimitedForm(w, r) {
 			return
 		}
 		if !validCSRFToken(db, r, cookie.Value) {
-			http.Error(w, "invalid csrf token", http.StatusForbidden)
+			renderHTTPError(w, http.StatusForbidden, "invalid csrf token")
 			return
 		}
 
@@ -364,7 +364,7 @@ func DeletePostHandler(db *sql.DB) http.HandlerFunc {
 		postIDStr := r.FormValue("post_id")
 		postID, err := strconv.Atoi(postIDStr)
 		if err != nil {
-			http.Error(w, "invalid post id", http.StatusBadRequest)
+			renderHTTPError(w, http.StatusBadRequest, "invalid post id")
 			return
 		}
 
@@ -373,11 +373,11 @@ func DeletePostHandler(db *sql.DB) http.HandlerFunc {
 		err = database.DeletePostByIDAndAuthorID(db, postID, userID)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				http.Error(w, "post not found or not yours", http.StatusForbidden)
+				renderHTTPError(w, http.StatusForbidden, "post not found or not yours")
 				return
 			}
 
-			http.Error(w, "unable to delete post", http.StatusInternalServerError)
+			renderHTTPError(w, http.StatusInternalServerError, "unable to delete post")
 			return
 		}
 

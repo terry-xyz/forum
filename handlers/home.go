@@ -28,12 +28,12 @@ type homeView struct {
 	NextURL      string
 }
 
-func renderHomePage(w http.ResponseWriter, db *sql.DB, posts []models.Post, currentUser *models.User, emptyMessage string, csrfToken string, pagination paginationView) error {
+func renderHomePage(w http.ResponseWriter, db *sql.DB, posts []models.Post, currentUser *models.User, emptyMessage string, csrfToken string, pagination paginationView, commentErrorPostID int, commentError string) error {
 	allCategories, err := database.GetAllCategories(db)
 	if err != nil {
 		return err
 	}
-	renderedPosts, err := buildRenderedPosts(db, posts, currentUser, csrfToken)
+	renderedPosts, err := buildRenderedPosts(db, posts, currentUser, csrfToken, commentErrorPostID, commentError)
 	if err != nil {
 		return err
 	}
@@ -137,18 +137,18 @@ func HomeHandler(db *sql.DB) http.HandlerFunc {
 			if err == nil {
 				userID, err := database.GetUserIDBySessionID(db, cookie.Value)
 				if err != nil {
-					http.Error(w, "internal error", http.StatusInternalServerError)
+					renderHTTPError(w, http.StatusInternalServerError, "internal error")
 					return
 				}
 				if userID != 0 {
 					currentUser, err = database.GetUserByID(db, userID)
 					if err != nil {
-						http.Error(w, "internal error", http.StatusInternalServerError)
+						renderHTTPError(w, http.StatusInternalServerError, "internal error")
 						return
 					}
 					csrfToken, err = database.GetCSRFTokenBySessionID(db, cookie.Value)
 					if err != nil {
-						http.Error(w, "internal error", http.StatusInternalServerError)
+						renderHTTPError(w, http.StatusInternalServerError, "internal error")
 						return
 					}
 				}
@@ -156,7 +156,7 @@ func HomeHandler(db *sql.DB) http.HandlerFunc {
 
 			page, err := parsePage(r)
 			if err != nil {
-				http.Error(w, "invalid page", http.StatusBadRequest)
+				renderHTTPError(w, http.StatusBadRequest, "invalid page")
 				return
 			}
 			offset := (page - 1) * feedPageSize
@@ -169,7 +169,7 @@ func HomeHandler(db *sql.DB) http.HandlerFunc {
 				// No filter means the newest feed page should be shown.
 				posts, err = database.GetAllPostsPage(db, feedPageSize+1, offset)
 				if err != nil {
-					http.Error(w, "internal server error", http.StatusInternalServerError)
+					renderHTTPError(w, http.StatusInternalServerError, "internal server error")
 					return
 				}
 			} else {
@@ -177,21 +177,21 @@ func HomeHandler(db *sql.DB) http.HandlerFunc {
 				// the request URL.
 				categoryID, err := strconv.Atoi(categoryIDStr)
 				if err != nil {
-					http.Error(w, "invalid category id", http.StatusBadRequest)
+					renderHTTPError(w, http.StatusBadRequest, "invalid category id")
 					return
 				}
 				// A valid category ID narrows the feed to posts linked to it.
 				posts, err = database.GetPostsByCategoryIDPage(db, categoryID, feedPageSize+1, offset)
 				if err != nil {
-					http.Error(w, "internal server error", http.StatusInternalServerError)
+					renderHTTPError(w, http.StatusInternalServerError, "internal server error")
 					return
 				}
 			}
 			posts, hasNext := trimPage(posts)
 
 			// Render the full page from the file-backed template.
-			if err := renderHomePage(w, db, posts, currentUser, "", csrfToken, paginationForRequest(r, page, hasNext)); err != nil {
-				http.Error(w, "failed to render home page", http.StatusInternalServerError)
+			if err := renderHomePage(w, db, posts, currentUser, "", csrfToken, paginationForRequest(r, page, hasNext), 0, ""); err != nil {
+				renderHTTPError(w, http.StatusInternalServerError, "failed to render home page")
 				return
 			}
 
@@ -199,6 +199,6 @@ func HomeHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		// POSTs and other methods should use the dedicated action endpoints.
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		renderHTTPError(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
 }

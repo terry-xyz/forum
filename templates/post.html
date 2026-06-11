@@ -28,6 +28,7 @@
 	<form class="comment-form" method="POST" action="/comment">
 		<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
 		<input type="hidden" name="post_id" value="{{.ID}}">
+		{{if .CommentError}}<p class="form-alert" role="alert">{{.CommentError}}</p>{{end}}
 		<textarea name="content"></textarea>
 		<button type="submit">Comment</button>
 	</form>

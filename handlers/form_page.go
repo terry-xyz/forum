@@ -84,3 +84,7 @@ func renderErrorPage(w http.ResponseWriter, status int, title string, message st
 </body>
 </html>`))
 }
+
+func renderHTTPError(w http.ResponseWriter, status int, message string) {
+	renderErrorPage(w, status, http.StatusText(status), message)
+}

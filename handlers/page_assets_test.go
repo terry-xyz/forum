@@ -22,3 +22,15 @@ func assertSharedPageAssets(t *testing.T, body string) {
 		}
 	}
 }
+
+func assertStyledErrorPage(t *testing.T, body string, message string) {
+	t.Helper()
+
+	assertSharedPageAssets(t, body)
+	if !strings.Contains(body, "error-page") {
+		t.Fatalf("body = %q, want styled error page", body)
+	}
+	if !strings.Contains(body, message) {
+		t.Fatalf("body = %q, want error message %q", body, message)
+	}
+}

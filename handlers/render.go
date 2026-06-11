@@ -19,6 +19,7 @@ type renderedPost struct {
 	CanDelete       bool
 	CSRFToken       string
 	Comments        []renderedComment
+	CommentError    string
 }
 
 type renderedComment struct {
@@ -33,7 +34,7 @@ type renderedComment struct {
 }
 
 // buildRenderedPosts resolves feed data into the view model used by the home template.
-func buildRenderedPosts(db *sql.DB, posts []models.Post, currentUser *models.User, csrfToken string) ([]renderedPost, error) {
+func buildRenderedPosts(db *sql.DB, posts []models.Post, currentUser *models.User, csrfToken string, commentErrorPostID int, commentError string) ([]renderedPost, error) {
 	renderedPosts := make([]renderedPost, 0, len(posts))
 	if len(posts) == 0 {
 		return renderedPosts, nil
@@ -108,6 +109,11 @@ func buildRenderedPosts(db *sql.DB, posts []models.Post, currentUser *models.Use
 			})
 		}
 
+		postCommentError := ""
+		if p.ID == commentErrorPostID {
+			postCommentError = commentError
+		}
+
 		renderedPosts = append(renderedPosts, renderedPost{
 			ID:              p.ID,
 			Title:           p.Title,
@@ -120,6 +126,7 @@ func buildRenderedPosts(db *sql.DB, posts []models.Post, currentUser *models.Use
 			CanDelete:       currentUser != nil && currentUser.ID == p.AuthorID,
 			CSRFToken:       csrfToken,
 			Comments:        renderedComments,
+			CommentError:    postCommentError,
 		})
 	}
 

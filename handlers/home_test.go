@@ -389,7 +389,7 @@ func TestRenderPostsReportsMissingCommentAuthor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = buildRenderedPosts(db, posts, user, "")
+	_, err = buildRenderedPosts(db, posts, user, "", 0, "")
 
 	if err == nil {
 		t.Fatal("expected missing comment author to return an error")
