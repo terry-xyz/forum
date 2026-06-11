@@ -78,6 +78,27 @@ func validPreAuthCSRFToken(r *http.Request) bool {
 	return subtle.ConstantTimeCompare([]byte(submittedToken), []byte(cookie.Value)) == 1
 }
 
+func registerFormHTML(csrfToken string, email string, username string) string {
+	return `
+			<form method="POST" action="/register">
+				<input type="hidden" name="csrf_token" value="` + html.EscapeString(csrfToken) + `">
+				<label>Email <input type="email" name="email" value="` + html.EscapeString(email) + `"></label>
+				<label>Username <input name="username" value="` + html.EscapeString(username) + `"></label>
+				<label>Password <input type="password" name="password"></label>
+				<button type="submit">Register</button>
+			</form>`
+}
+
+func loginFormHTML(csrfToken string, email string) string {
+	return `
+			<form method="POST" action="/login">
+				<input type="hidden" name="csrf_token" value="` + html.EscapeString(csrfToken) + `">
+				<label>Email <input type="email" name="email" value="` + html.EscapeString(email) + `"></label>
+				<label>Password <input type="password" name="password"></label>
+				<button type="submit">Login</button>
+			</form>`
+}
+
 // RegisterHandler serves the registration form and creates new user accounts.
 func RegisterHandler(db *sql.DB) http.HandlerFunc {
 
@@ -93,14 +114,7 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 				return
 			}
 
-			renderFormPage(w, "Register", `
-			<form method="POST" action="/register">
-				<input type="hidden" name="csrf_token" value="`+html.EscapeString(csrfToken)+`">
-				<label>Email <input type="email" name="email"></label>
-				<label>Username <input name="username"></label>
-				<label>Password <input type="password" name="password"></label>
-				<button type="submit">Register</button>
-			</form>`)
+			renderFormPage(w, "Register", "", registerFormHTML(csrfToken, "", ""))
 			return
 		}
 
@@ -123,19 +137,19 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 			_, err := mail.ParseAddress(email)
 
 			if err != nil {
-				http.Error(w, "invalid email format", http.StatusBadRequest)
+				renderFormPage(w, "Register", "invalid email format", registerFormHTML(r.PostForm.Get("csrf_token"), email, username))
 				return
 			}
 			if username == "" {
-				http.Error(w, "username cannot be empty", http.StatusBadRequest)
+				renderFormPage(w, "Register", "username cannot be empty", registerFormHTML(r.PostForm.Get("csrf_token"), email, username))
 				return
 			}
 			if exceedsCharacterLimit(username, maxUsernameChars) {
-				http.Error(w, "username cannot exceed 280 characters", http.StatusBadRequest)
+				renderFormPage(w, "Register", "username cannot exceed 280 characters", registerFormHTML(r.PostForm.Get("csrf_token"), email, username))
 				return
 			}
 			if len(password) < 8 {
-				http.Error(w, "password must be at least 8 characters long", http.StatusBadRequest)
+				renderFormPage(w, "Register", "password must be at least 8 characters long", registerFormHTML(r.PostForm.Get("csrf_token"), email, username))
 				return
 			}
 
@@ -193,13 +207,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 				return
 			}
 
-			renderFormPage(w, "Login", `
-			<form method="POST" action="/login">
-				<input type="hidden" name="csrf_token" value="`+html.EscapeString(csrfToken)+`">
-				<label>Email <input type="email" name="email"></label>
-				<label>Password <input type="password" name="password"></label>
-				<button type="submit">Login</button>
-			</form>`)
+			renderFormPage(w, "Login", "", loginFormHTML(csrfToken, ""))
 			return
 		}
 
@@ -221,11 +229,11 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 			_, err := mail.ParseAddress(email)
 
 			if err != nil {
-				http.Error(w, "invalid email format", http.StatusBadRequest)
+				renderFormPage(w, "Login", "invalid email format", loginFormHTML(r.PostForm.Get("csrf_token"), email))
 				return
 			}
 			if len(password) < 8 {
-				http.Error(w, "password must be at least 8 characters long", http.StatusBadRequest)
+				renderFormPage(w, "Login", "password must be at least 8 characters long", loginFormHTML(r.PostForm.Get("csrf_token"), email))
 				return
 			}
 
@@ -239,7 +247,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 			// Use the same response for unknown emails and bad passwords so login
 			// attempts cannot reveal which accounts exist.
 			if user == nil {
-				http.Error(w, "invalid email or password", http.StatusUnauthorized)
+				renderFormPage(w, "Login", "invalid email or password", loginFormHTML(r.PostForm.Get("csrf_token"), email))
 				return
 			}
 
@@ -247,7 +255,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 			// stored bcrypt hash without needing the original password.
 			err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 			if err != nil {
-				http.Error(w, "invalid email or password", http.StatusUnauthorized)
+				renderFormPage(w, "Login", "invalid email or password", loginFormHTML(r.PostForm.Get("csrf_token"), email))
 				return
 			}
 

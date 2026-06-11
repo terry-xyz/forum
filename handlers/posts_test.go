@@ -180,12 +180,16 @@ func TestCreatePostHandlerRejectsWhitespacePostFields(t *testing.T) {
 
 			CreatePostHandler(db)(w, req)
 
-			if w.Code != http.StatusBadRequest {
-				t.Fatalf("status = %d, want %d", w.Code, http.StatusBadRequest)
+			if w.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 			}
 			if !strings.Contains(w.Body.String(), tt.message) {
 				t.Fatalf("body = %q, want %q", w.Body.String(), tt.message)
 			}
+			if !strings.Contains(w.Body.String(), `class="form-alert"`) {
+				t.Fatalf("body = %q, want inline form alert", w.Body.String())
+			}
+			assertSharedPageAssets(t, w.Body.String())
 
 			posts, err := database.GetAllPosts(db)
 			if err != nil {
@@ -249,12 +253,16 @@ func TestCreatePostHandlerRejectsOversizedFields(t *testing.T) {
 
 			CreatePostHandler(db)(w, req)
 
-			if w.Code != http.StatusBadRequest {
-				t.Fatalf("status = %d, want %d", w.Code, http.StatusBadRequest)
+			if w.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 			}
 			if !strings.Contains(w.Body.String(), tt.message) {
 				t.Fatalf("body = %q, want %q", w.Body.String(), tt.message)
 			}
+			if !strings.Contains(w.Body.String(), `class="form-alert"`) {
+				t.Fatalf("body = %q, want inline form alert", w.Body.String())
+			}
+			assertSharedPageAssets(t, w.Body.String())
 
 			posts, err := database.GetAllPosts(db)
 			if err != nil {
@@ -299,6 +307,54 @@ func TestCreatePostHandlerRejectsOversizedRequestBody(t *testing.T) {
 	if w.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusRequestEntityTooLarge)
 	}
+	posts, err := database.GetAllPosts(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(posts) != 0 {
+		t.Fatalf("posts = %d, want 0", len(posts))
+	}
+}
+
+func TestCreatePostHandlerRejectsMissingCategoriesInline(t *testing.T) {
+	db := openTestDB(t)
+
+	if err := database.CreateUser(db, "author@example.com", "author", "password"); err != nil {
+		t.Fatal(err)
+	}
+	user, err := database.GetUserByEmail(db, "author@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user == nil {
+		t.Fatal("user was not created")
+	}
+	sessionID := createSessionForUserID(t, db, "create-post-session", user.ID)
+	csrfToken := csrfTokenForTest(t, db, sessionID)
+
+	form := url.Values{
+		"title":      {"First post"},
+		"content":    {"Hello forum"},
+		"csrf_token": {csrfToken},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/create-post", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "session", Value: sessionID})
+	w := httptest.NewRecorder()
+
+	CreatePostHandler(db)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if !strings.Contains(w.Body.String(), "select at least one category") {
+		t.Fatalf("body = %q, want missing category message", w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `class="form-alert"`) {
+		t.Fatalf("body = %q, want inline form alert", w.Body.String())
+	}
+	assertSharedPageAssets(t, w.Body.String())
+
 	posts, err := database.GetAllPosts(db)
 	if err != nil {
 		t.Fatal(err)

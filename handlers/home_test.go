@@ -32,6 +32,26 @@ func TestHomeHandlerRejectsUnsupportedMethod(t *testing.T) {
 	}
 }
 
+func TestHomeHandlerRendersStyledNotFoundPage(t *testing.T) {
+	db := openTestDB(t)
+	req := httptest.NewRequest(http.MethodGet, "/missing", nil)
+	w := httptest.NewRecorder()
+
+	HomeHandler(db)(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusNotFound)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Page not found") {
+		t.Fatalf("body = %q, want not found message", body)
+	}
+	if !strings.Contains(body, "error-page") {
+		t.Fatalf("body = %q, want styled error page", body)
+	}
+	assertSharedPageAssets(t, body)
+}
+
 // TestHomeHandlerAllowsGuestSession verifies guests can read the public feed.
 func TestHomeHandlerAllowsGuestSession(t *testing.T) {
 	// Guest rendering still needs the database because the feed and category

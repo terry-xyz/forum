@@ -185,12 +185,16 @@ func TestRegisterHandlerRejectsInvalidRequiredFields(t *testing.T) {
 
 			RegisterHandler(db)(w, req)
 
-			if w.Code != http.StatusBadRequest {
-				t.Fatalf("status = %d, want %d", w.Code, http.StatusBadRequest)
+			if w.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 			}
 			if !strings.Contains(w.Body.String(), tt.message) {
 				t.Fatalf("body = %q, want %q", w.Body.String(), tt.message)
 			}
+			if !strings.Contains(w.Body.String(), `class="form-alert"`) {
+				t.Fatalf("body = %q, want inline form alert", w.Body.String())
+			}
+			assertSharedPageAssets(t, w.Body.String())
 
 			users, err := db.Query("SELECT id FROM users")
 			if err != nil {
@@ -222,15 +226,19 @@ func TestLoginHandlerRejectsUnknownEmail(t *testing.T) {
 
 	LoginHandler(db)(w, req)
 
-	// Unknown users should receive the same unauthorized response as bad passwords.
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want %d", w.Code, http.StatusUnauthorized)
+	// Unknown users should receive the same inline response as bad passwords.
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 	}
 
 	// The message intentionally avoids revealing whether the email exists.
 	if !strings.Contains(w.Body.String(), "invalid email or password") {
 		t.Fatalf("body = %q, want invalid credentials message", w.Body.String())
 	}
+	if !strings.Contains(w.Body.String(), `class="form-alert"`) {
+		t.Fatalf("body = %q, want inline form alert", w.Body.String())
+	}
+	assertSharedPageAssets(t, w.Body.String())
 }
 
 // TestLoginHandlerRejectsWrongPassword verifies password mismatch handling.
@@ -253,14 +261,18 @@ func TestLoginHandlerRejectsWrongPassword(t *testing.T) {
 	LoginHandler(db)(w, req)
 
 	// Bad credentials should not set a session or redirect.
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want %d", w.Code, http.StatusUnauthorized)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 	}
 
 	// The response text should match the unknown-email branch.
 	if !strings.Contains(w.Body.String(), "invalid email or password") {
 		t.Fatalf("body = %q, want invalid credentials message", w.Body.String())
 	}
+	if !strings.Contains(w.Body.String(), `class="form-alert"`) {
+		t.Fatalf("body = %q, want inline form alert", w.Body.String())
+	}
+	assertSharedPageAssets(t, w.Body.String())
 }
 
 // TestLoginHandlerSetsSessionCookie verifies successful login creates a cookie.

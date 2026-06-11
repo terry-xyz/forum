@@ -120,6 +120,10 @@ func HomeHandler(db *sql.DB) http.HandlerFunc {
 
 	// Capture the database handle for all requests served by this route.
 	return func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			renderErrorPage(w, http.StatusNotFound, "Page not found", "The page you requested does not exist.")
+			return
+		}
 
 		// The home page is currently read-only, so only GET is supported.
 		if r.Method == http.MethodGet {

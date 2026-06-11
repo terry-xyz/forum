@@ -4,11 +4,60 @@ import (
 	"database/sql"
 	"errors"
 	"forum/database"
+	"forum/models"
 	"html"
 	"net/http"
 	"strconv"
 	"strings"
 )
+
+func createPostFormHTML(csrfToken string, categories []models.Category, title string, content string, selectedCategoryIDs []string) string {
+	selected := make(map[string]bool, len(selectedCategoryIDs))
+	for _, categoryID := range selectedCategoryIDs {
+		selected[categoryID] = true
+	}
+
+	var form strings.Builder
+	form.WriteString(`
+			<form method="POST" action="/create-post">
+				<input type="hidden" name="csrf_token" value="` + html.EscapeString(csrfToken) + `">
+				<label>Title <input name="title" value="` + html.EscapeString(title) + `"></label>
+				<label>Content <textarea name="content">` + html.EscapeString(content) + `</textarea></label>
+				<fieldset>
+					<legend>Categories</legend>
+			`)
+	for _, c := range categories {
+		categoryID := strconv.Itoa(c.ID)
+		checked := ""
+		if selected[categoryID] {
+			checked = " checked"
+		}
+		form.WriteString(`
+				<label>
+					<input type="checkbox" name="category_ids" value="` + categoryID + `"` + checked + `>` + html.EscapeString(c.Name) +
+			`</label>`)
+	}
+	form.WriteString(`
+				</fieldset>
+				<button type="submit">Create Post</button>
+			</form>
+			`)
+
+	return form.String()
+}
+
+func renderCreatePostFormPage(w http.ResponseWriter, db *sql.DB, csrfToken string, alert string, title string, content string, selectedCategoryIDs []string) bool {
+	// Categories come from the database so form options stay in sync with
+	// the schema seed data.
+	categories, err := database.GetAllCategories(db)
+	if err != nil {
+		http.Error(w, "unable to fetch categories", http.StatusInternalServerError)
+		return false
+	}
+
+	renderFormPage(w, "Create post", alert, createPostFormHTML(csrfToken, categories, title, content, selectedCategoryIDs))
+	return true
+}
 
 // CreatePostHandler serves the post form and creates posts for the logged-in user.
 func CreatePostHandler(db *sql.DB) http.HandlerFunc {
@@ -44,37 +93,7 @@ func CreatePostHandler(db *sql.DB) http.HandlerFunc {
 
 		// GET renders the post creation form and its category checkboxes.
 		if r.Method == http.MethodGet {
-			// Categories come from the database so form options stay in sync with
-			// the schema seed data.
-			categories, err := database.GetAllCategories(db)
-			if err != nil {
-				http.Error(w, "unable to fetch categories", http.StatusInternalServerError)
-				return
-			}
-
-			var form strings.Builder
-			form.WriteString(`
-			<form method="POST" action="/create-post">
-				<input type="hidden" name="csrf_token" value="` + html.EscapeString(csrfToken) + `">
-				<label>Title <input name="title"></label>
-				<label>Content <textarea name="content"></textarea></label>
-				<fieldset>
-					<legend>Categories</legend>
-			`)
-			// Each category becomes one checkbox sharing the category_ids field name.
-			for _, c := range categories {
-				form.WriteString(`
-				<label>
-					<input type="checkbox" name="category_ids" value="` + strconv.Itoa(c.ID) + `">` + html.EscapeString(c.Name) +
-					`</label>`)
-			}
-			// Close the form after all dynamic checkbox rows have been written.
-			form.WriteString(`
-				</fieldset>
-				<button type="submit">Create Post</button>
-			</form>
-			`)
-			renderFormPage(w, "Create post", form.String())
+			renderCreatePostFormPage(w, db, csrfToken, "", "", "", nil)
 			return
 		}
 
@@ -89,28 +108,30 @@ func CreatePostHandler(db *sql.DB) http.HandlerFunc {
 			}
 
 			// Scalar fields come from the submitted form body.
-			title := strings.TrimSpace(r.FormValue("title"))
-			content := strings.TrimSpace(r.FormValue("content"))
+			rawTitle := r.FormValue("title")
+			rawContent := r.FormValue("content")
+			title := strings.TrimSpace(rawTitle)
+			content := strings.TrimSpace(rawContent)
+			categoryIDStrs := r.Form["category_ids"]
 
 			if title == "" {
-				http.Error(w, "title cannot be empty", http.StatusBadRequest)
+				renderCreatePostFormPage(w, db, csrfToken, "title cannot be empty", rawTitle, rawContent, categoryIDStrs)
 				return
 			}
 			if content == "" {
-				http.Error(w, "content cannot be empty", http.StatusBadRequest)
+				renderCreatePostFormPage(w, db, csrfToken, "content cannot be empty", rawTitle, rawContent, categoryIDStrs)
 				return
 			}
 			if exceedsCharacterLimit(title, maxPostTitleChars) {
-				http.Error(w, "title cannot exceed 280 characters", http.StatusBadRequest)
+				renderCreatePostFormPage(w, db, csrfToken, "title cannot exceed 280 characters", rawTitle, rawContent, categoryIDStrs)
 				return
 			}
 			if exceedsCharacterLimit(content, maxPostContentChars) {
-				http.Error(w, "content cannot exceed 280 characters", http.StatusBadRequest)
+				renderCreatePostFormPage(w, db, csrfToken, "content cannot exceed 280 characters", rawTitle, rawContent, categoryIDStrs)
 				return
 			}
 
 			// Convert the repeated checkbox values from strings into database IDs.
-			categoryIDStrs := r.Form["category_ids"]
 			var categoryIDs []int
 			for _, c := range categoryIDStrs {
 				categoryID, err := strconv.Atoi(c)
@@ -124,7 +145,7 @@ func CreatePostHandler(db *sql.DB) http.HandlerFunc {
 
 			// A post must belong to at least one category for filtering to work.
 			if len(categoryIDs) == 0 {
-				http.Error(w, "select at least one category", http.StatusBadRequest)
+				renderCreatePostFormPage(w, db, csrfToken, "select at least one category", rawTitle, rawContent, categoryIDStrs)
 				return
 			}
 
