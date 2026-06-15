@@ -87,7 +87,7 @@ func TestCreateCommentHandlerRejectsOversizedContent(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 	}
-	if !strings.Contains(w.Body.String(), "comment cannot exceed 280 characters") {
+	if !strings.Contains(w.Body.String(), "comment cannot exceed 500 characters") {
 		t.Fatalf("body = %q, want comment length error", w.Body.String())
 	}
 	if !strings.Contains(w.Body.String(), `class="form-alert"`) {

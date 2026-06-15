@@ -29,7 +29,8 @@
 		<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
 		<input type="hidden" name="post_id" value="{{.ID}}">
 		{{if .CommentError}}<p class="form-alert" role="alert">{{.CommentError}}</p>{{end}}
-		<textarea name="content"></textarea>
+		<textarea name="content" data-comment-textarea data-comment-limit="{{.CommentLimit}}" data-comment-warning-threshold="{{.CommentWarning}}" aria-describedby="comment-counter-{{.ID}}"></textarea>
+		<p id="comment-counter-{{.ID}}" class="comment-counter" data-comment-counter aria-live="polite"></p>
 		<button type="submit">Comment</button>
 	</form>
 {{end}}

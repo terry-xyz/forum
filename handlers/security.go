@@ -11,11 +11,12 @@ import (
 )
 
 const (
-	maxFormBodyBytes       int64 = 16 * 1024
-	maxPostTitleChars            = 280
-	maxPostContentChars          = 280
-	maxCommentContentChars       = 280
-	maxUsernameChars             = 280
+	maxFormBodyBytes          int64 = 16 * 1024
+	maxPostTitleChars               = 280
+	maxPostContentChars             = 280
+	maxCommentContentChars          = 500
+	commentWarningBeforeLimit       = 50
+	maxUsernameChars                = 280
 )
 
 func parseLimitedForm(w http.ResponseWriter, r *http.Request) bool {

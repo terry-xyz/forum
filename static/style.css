@@ -382,6 +382,32 @@ button:active {
 	transform: translateY(0);
 }
 
+button:disabled {
+	border-color: var(--border);
+	background: var(--surface-muted);
+	color: var(--muted);
+	cursor: not-allowed;
+	transform: none;
+}
+
+button:disabled:hover {
+	border-color: var(--border);
+	background: var(--surface-muted);
+	transform: none;
+}
+
+.comment-counter {
+	min-height: 1.2rem;
+	margin: 0.35rem 0 0;
+	color: var(--muted);
+	font-size: 0.88rem;
+	font-weight: 650;
+}
+
+.comment-counter.is-over-limit {
+	color: var(--danger);
+}
+
 .theme-toggle {
 	min-width: 4.75rem;
 	border-color: var(--border);

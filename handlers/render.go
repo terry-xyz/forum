@@ -20,6 +20,8 @@ type renderedPost struct {
 	CSRFToken       string
 	Comments        []renderedComment
 	CommentError    string
+	CommentLimit    int
+	CommentWarning  int
 }
 
 type renderedComment struct {
@@ -127,6 +129,8 @@ func buildRenderedPosts(db *sql.DB, posts []models.Post, currentUser *models.Use
 			CSRFToken:       csrfToken,
 			Comments:        renderedComments,
 			CommentError:    postCommentError,
+			CommentLimit:    maxCommentContentChars,
+			CommentWarning:  maxCommentContentChars - commentWarningBeforeLimit,
 		})
 	}
 

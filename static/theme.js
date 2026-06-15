@@ -74,4 +74,44 @@
 	} else if (typeof media.addListener === "function") {
 		media.addListener(syncSystemTheme);
 	}
+
+	function countCharacters(value) {
+		return Array.from(value).length;
+	}
+
+	function initCommentCounters() {
+		document.querySelectorAll(".comment-form").forEach(function (form) {
+			const textarea = form.querySelector("[data-comment-textarea]");
+			const counter = form.querySelector("[data-comment-counter]");
+			const submit = form.querySelector('button[type="submit"]');
+			if (!textarea || !counter || !submit) {
+				return;
+			}
+
+			const limit = Number.parseInt(textarea.dataset.commentLimit, 10);
+			const warningThreshold = Number.parseInt(textarea.dataset.commentWarningThreshold, 10);
+			if (!Number.isFinite(limit) || !Number.isFinite(warningThreshold)) {
+				return;
+			}
+
+			function updateCounter() {
+				const count = countCharacters(textarea.value);
+				const overLimit = count > limit;
+				const showWarning = count >= warningThreshold;
+
+				counter.textContent = showWarning ? count + " / " + limit + " characters" : "";
+				counter.classList.toggle("is-over-limit", overLimit);
+				submit.disabled = overLimit;
+			}
+
+			textarea.addEventListener("input", updateCounter);
+			updateCounter();
+		});
+	}
+
+	if (document.readyState === "loading") {
+		document.addEventListener("DOMContentLoaded", initCommentCounters);
+	} else {
+		initCommentCounters();
+	}
 })();

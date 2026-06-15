@@ -94,7 +94,7 @@ func CreateCommentHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 		if exceedsCharacterLimit(content, maxCommentContentChars) {
-			renderCommentValidationError(w, db, currentUser, csrfToken, postID, "comment cannot exceed 280 characters")
+			renderCommentValidationError(w, db, currentUser, csrfToken, postID, "comment cannot exceed 500 characters")
 			return
 		}
 
