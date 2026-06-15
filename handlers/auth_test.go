@@ -158,6 +158,20 @@ func TestRegisterHandlerRejectsInvalidRequiredFields(t *testing.T) {
 			message: "invalid email format",
 		},
 		{
+			name:    "email without domain suffix",
+			email:   "user@example",
+			user:    "user",
+			pass:    "password",
+			message: "invalid email format",
+		},
+		{
+			name:    "email with domain whitespace",
+			email:   "user@ example.com",
+			user:    "user",
+			pass:    "password",
+			message: "invalid email format",
+		},
+		{
 			name:    "blank username",
 			email:   "user@example.com",
 			user:    "\t ",

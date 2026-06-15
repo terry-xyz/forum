@@ -99,6 +99,30 @@ func loginFormHTML(csrfToken string, email string) string {
 			</form>`
 }
 
+func validEmailAddress(email string) bool {
+	address, err := mail.ParseAddress(email)
+	if err != nil || address.Address != email {
+		return false
+	}
+
+	local, domain, ok := strings.Cut(email, "@")
+	if !ok || local == "" || domain == "" || strings.ContainsAny(email, " \t\r\n") {
+		return false
+	}
+
+	if !strings.Contains(domain, ".") || strings.HasPrefix(domain, ".") || strings.HasSuffix(domain, ".") {
+		return false
+	}
+
+	for _, label := range strings.Split(domain, ".") {
+		if label == "" {
+			return false
+		}
+	}
+
+	return true
+}
+
 // RegisterHandler serves the registration form and creates new user accounts.
 func RegisterHandler(db *sql.DB) http.HandlerFunc {
 
@@ -134,9 +158,7 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 			username := strings.TrimSpace(r.FormValue("username"))
 			password := strings.TrimSpace(r.FormValue("password"))
 
-			_, err := mail.ParseAddress(email)
-
-			if err != nil {
+			if !validEmailAddress(email) {
 				renderFormPage(w, "Register", "invalid email format", registerFormHTML(r.PostForm.Get("csrf_token"), email, username))
 				return
 			}
@@ -166,7 +188,7 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 				if isConstraintError(err) {
 					// Use the same public response as a successful registration so
 					// attackers cannot test whether an email or username exists.
-					http.Redirect(w, r, "/register", http.StatusSeeOther)
+					http.Redirect(w, r, "/login", http.StatusSeeOther)
 					return
 				}
 
@@ -176,7 +198,7 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 
 			// Redirect after a successful POST so browser refresh does not submit
 			// the same registration again.
-			http.Redirect(w, r, "/register", http.StatusSeeOther)
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
 
