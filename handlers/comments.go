@@ -21,7 +21,7 @@ func renderCommentValidationError(w http.ResponseWriter, db *sql.DB, currentUser
 		HasNext: hasNext,
 		NextURL: pageURL("/", nil, 2),
 	}
-	if err := renderHomePage(w, db, posts, currentUser, "", csrfToken, pagination, postID, message); err != nil {
+	if err := renderHomePage(w, db, posts, currentUser, "", csrfToken, 0, pagination, postID, message); err != nil {
 		renderHTTPError(w, http.StatusInternalServerError, "failed to render home page")
 	}
 }

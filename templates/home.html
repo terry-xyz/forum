@@ -10,8 +10,8 @@
 <body>
 	<nav class="site-nav" aria-label="Primary">
 		<div class="category-nav" aria-label="Categories">
-			<a href="/">All</a>
-			{{range .Categories}}<a href="/?category_id={{.ID}}">{{.Name}}</a>{{end}}
+			<a{{if eq .SelectedCategoryID 0}} class="is-active" aria-current="page"{{end}} href="/">All</a>
+			{{range .Categories}}<a{{if eq $.SelectedCategoryID .ID}} class="is-active" aria-current="page"{{end}} href="/?category_id={{.ID}}">{{.Name}}</a>{{end}}
 		</div>
 		<div class="account-nav">
 		{{if .CurrentUser}}

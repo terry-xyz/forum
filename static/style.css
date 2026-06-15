@@ -160,6 +160,14 @@ input:focus-visible {
 	transform: translateY(-1px);
 }
 
+.category-nav a.is-active,
+.category-nav a[aria-current="page"] {
+	border-color: var(--accent);
+	background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+	color: var(--accent-strong);
+	font-weight: 750;
+}
+
 .inline-form,
 .post-actions form,
 .comment-actions form {

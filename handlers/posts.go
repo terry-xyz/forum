@@ -241,7 +241,7 @@ func MyPostsHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		if err := renderHomePage(w, db, posts, currentUser, emptyMessage, csrfToken, paginationForRequest(r, page, hasNext), 0, ""); err != nil {
+		if err := renderHomePage(w, db, posts, currentUser, emptyMessage, csrfToken, -1, paginationForRequest(r, page, hasNext), 0, ""); err != nil {
 			renderHTTPError(w, http.StatusInternalServerError, "failed to render posts")
 			return
 		}
@@ -317,7 +317,7 @@ func LikedPostsHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		if err := renderHomePage(w, db, posts, currentUser, emptyMessage, csrfToken, paginationForRequest(r, page, hasNext), 0, ""); err != nil {
+		if err := renderHomePage(w, db, posts, currentUser, emptyMessage, csrfToken, -1, paginationForRequest(r, page, hasNext), 0, ""); err != nil {
 			renderHTTPError(w, http.StatusInternalServerError, "failed to render posts")
 			return
 		}

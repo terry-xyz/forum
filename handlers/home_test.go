@@ -101,6 +101,43 @@ func TestHomeHandlerRendersFullHTMLDocument(t *testing.T) {
 	}
 }
 
+func TestHomeHandlerHighlightsAllCategoryByDefault(t *testing.T) {
+	db := openTestDB(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+
+	HomeHandler(db)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %q", w.Code, http.StatusOK, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `<a class="is-active" aria-current="page" href="/">All</a>`) {
+		t.Fatalf("body = %q, want active All category link", body)
+	}
+}
+
+func TestHomeHandlerHighlightsSelectedCategory(t *testing.T) {
+	db := openTestDB(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/?category_id=1", nil)
+	w := httptest.NewRecorder()
+
+	HomeHandler(db)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %q", w.Code, http.StatusOK, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `<a class="is-active" aria-current="page" href="/?category_id=1">General</a>`) {
+		t.Fatalf("body = %q, want active selected category link", body)
+	}
+	if strings.Contains(body, `<a class="is-active" aria-current="page" href="/">All</a>`) {
+		t.Fatalf("body = %q, want All link inactive for category filter", body)
+	}
+}
+
 // TestHomeHandlerRendersPostsWithAuthors verifies the happy-path home output.
 func TestHomeHandlerRendersPostsWithAuthors(t *testing.T) {
 	// Build a database with one author and one post.

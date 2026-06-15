@@ -17,18 +17,19 @@ const (
 )
 
 type homeView struct {
-	Categories   []models.Category
-	CurrentUser  *models.User
-	CSRFToken    string
-	Posts        []renderedPost
-	EmptyMessage string
-	HasPrev      bool
-	HasNext      bool
-	PrevURL      string
-	NextURL      string
+	Categories         []models.Category
+	CurrentUser        *models.User
+	CSRFToken          string
+	Posts              []renderedPost
+	EmptyMessage       string
+	SelectedCategoryID int
+	HasPrev            bool
+	HasNext            bool
+	PrevURL            string
+	NextURL            string
 }
 
-func renderHomePage(w http.ResponseWriter, db *sql.DB, posts []models.Post, currentUser *models.User, emptyMessage string, csrfToken string, pagination paginationView, commentErrorPostID int, commentError string) error {
+func renderHomePage(w http.ResponseWriter, db *sql.DB, posts []models.Post, currentUser *models.User, emptyMessage string, csrfToken string, selectedCategoryID int, pagination paginationView, commentErrorPostID int, commentError string) error {
 	allCategories, err := database.GetAllCategories(db)
 	if err != nil {
 		return err
@@ -40,15 +41,16 @@ func renderHomePage(w http.ResponseWriter, db *sql.DB, posts []models.Post, curr
 
 	w.Header().Set("Content-Type", "text/html")
 	return templates.Home.Execute(w, homeView{
-		Categories:   allCategories,
-		CurrentUser:  currentUser,
-		CSRFToken:    csrfToken,
-		Posts:        renderedPosts,
-		EmptyMessage: emptyMessage,
-		HasPrev:      pagination.HasPrev,
-		HasNext:      pagination.HasNext,
-		PrevURL:      pagination.PrevURL,
-		NextURL:      pagination.NextURL,
+		Categories:         allCategories,
+		CurrentUser:        currentUser,
+		CSRFToken:          csrfToken,
+		Posts:              renderedPosts,
+		EmptyMessage:       emptyMessage,
+		SelectedCategoryID: selectedCategoryID,
+		HasPrev:            pagination.HasPrev,
+		HasNext:            pagination.HasNext,
+		PrevURL:            pagination.PrevURL,
+		NextURL:            pagination.NextURL,
 	})
 }
 
@@ -164,6 +166,7 @@ func HomeHandler(db *sql.DB) http.HandlerFunc {
 			// Choose between the default feed and a category-filtered feed based
 			// on the optional query string.
 			var posts []models.Post
+			selectedCategoryID := 0
 			categoryIDStr := r.URL.Query().Get("category_id")
 			if categoryIDStr == "" {
 				// No filter means the newest feed page should be shown.
@@ -180,6 +183,7 @@ func HomeHandler(db *sql.DB) http.HandlerFunc {
 					renderHTTPError(w, http.StatusBadRequest, "invalid category id")
 					return
 				}
+				selectedCategoryID = categoryID
 				// A valid category ID narrows the feed to posts linked to it.
 				posts, err = database.GetPostsByCategoryIDPage(db, categoryID, feedPageSize+1, offset)
 				if err != nil {
@@ -190,7 +194,7 @@ func HomeHandler(db *sql.DB) http.HandlerFunc {
 			posts, hasNext := trimPage(posts)
 
 			// Render the full page from the file-backed template.
-			if err := renderHomePage(w, db, posts, currentUser, "", csrfToken, paginationForRequest(r, page, hasNext), 0, ""); err != nil {
+			if err := renderHomePage(w, db, posts, currentUser, "", csrfToken, selectedCategoryID, paginationForRequest(r, page, hasNext), 0, ""); err != nil {
 				renderHTTPError(w, http.StatusInternalServerError, "failed to render home page")
 				return
 			}
