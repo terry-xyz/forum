@@ -174,6 +174,24 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 				renderFormPage(w, "Register", "password must be at least 8 characters long", registerFormHTML(r.PostForm.Get("csrf_token"), email, username))
 				return
 			}
+			existingUser, err := database.GetUserByEmail(db, email)
+			if err != nil {
+				renderHTTPError(w, http.StatusInternalServerError, "unable to validate email")
+				return
+			}
+			if existingUser != nil {
+				renderFormPage(w, "Register", "email is being used", registerFormHTML(r.PostForm.Get("csrf_token"), email, username))
+				return
+			}
+			existingUser, err = database.GetUserByUsername(db, username)
+			if err != nil {
+				renderHTTPError(w, http.StatusInternalServerError, "unable to validate username")
+				return
+			}
+			if existingUser != nil {
+				renderFormPage(w, "Register", "username is being used", registerFormHTML(r.PostForm.Get("csrf_token"), email, username))
+				return
+			}
 
 			// Store only a bcrypt hash so a database leak does not expose raw passwords.
 			hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)

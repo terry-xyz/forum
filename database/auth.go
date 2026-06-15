@@ -27,6 +27,23 @@ func GetUserByEmail(db *sql.DB, email string) (*models.User, error) {
 	return &user, nil
 }
 
+// GetUserByUsername returns the user with the given username, or nil when no user exists.
+func GetUserByUsername(db *sql.DB, username string) (*models.User, error) {
+	query := "SELECT id, email, username, password FROM users WHERE username = ?"
+	row := db.QueryRow(query, username)
+
+	var user models.User
+
+	err := row.Scan(&user.ID, &user.Email, &user.Username, &user.Password)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
 // GetUserByID returns the user with the given ID, or nil when no user exists.
 func GetUserByID(db *sql.DB, id int) (*models.User, error) {
 

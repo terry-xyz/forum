@@ -101,43 +101,64 @@ func TestRegisterHandlerRejectsMissingPreAuthCSRFToken(t *testing.T) {
 	}
 }
 
-// TestRegisterHandlerDoesNotRevealDuplicateUser verifies duplicate account
-// conflicts do not expose whether an email or username already exists.
-func TestRegisterHandlerDoesNotRevealDuplicateUser(t *testing.T) {
-	db := openTestDB(t)
-
-	if err := database.CreateUser(db, "user@example.com", "user", "password"); err != nil {
-		t.Fatal(err)
+func TestRegisterHandlerReportsDuplicateUserFields(t *testing.T) {
+	tests := []struct {
+		name     string
+		email    string
+		username string
+		message  string
+	}{
+		{
+			name:     "duplicate email",
+			email:    "user@example.com",
+			username: "new-user",
+			message:  "email is being used",
+		},
+		{
+			name:     "duplicate username",
+			email:    "new@example.com",
+			username: "user",
+			message:  "username is being used",
+		},
 	}
 
-	newForm := url.Values{
-		"email":    {"new@example.com"},
-		"username": {"new-user"},
-		"password": {"password"},
-	}
-	newReq := newPreAuthPostRequest(t, RegisterHandler(db), "/register", newForm)
-	newResponse := httptest.NewRecorder()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := openTestDB(t)
 
-	RegisterHandler(db)(newResponse, newReq)
+			if err := database.CreateUser(db, "user@example.com", "user", "password"); err != nil {
+				t.Fatal(err)
+			}
 
-	duplicateForm := url.Values{
-		"email":    {"user@example.com"},
-		"username": {"user"},
-		"password": {"password"},
-	}
-	duplicateReq := newPreAuthPostRequest(t, RegisterHandler(db), "/register", duplicateForm)
-	duplicateResponse := httptest.NewRecorder()
+			form := url.Values{
+				"email":    {tt.email},
+				"username": {tt.username},
+				"password": {"password"},
+			}
+			req := newPreAuthPostRequest(t, RegisterHandler(db), "/register", form)
+			w := httptest.NewRecorder()
 
-	RegisterHandler(db)(duplicateResponse, duplicateReq)
+			RegisterHandler(db)(w, req)
 
-	if duplicateResponse.Code != newResponse.Code {
-		t.Fatalf("duplicate status = %d, want %d", duplicateResponse.Code, newResponse.Code)
-	}
-	if duplicateResponse.Header().Get("Location") != newResponse.Header().Get("Location") {
-		t.Fatalf("duplicate location = %q, want %q", duplicateResponse.Header().Get("Location"), newResponse.Header().Get("Location"))
-	}
-	if duplicateResponse.Body.String() != newResponse.Body.String() {
-		t.Fatalf("duplicate body = %q, want %q", duplicateResponse.Body.String(), newResponse.Body.String())
+			if w.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+			}
+			if !strings.Contains(w.Body.String(), tt.message) {
+				t.Fatalf("body = %q, want %q", w.Body.String(), tt.message)
+			}
+			if !strings.Contains(w.Body.String(), `class="form-alert"`) {
+				t.Fatalf("body = %q, want inline form alert", w.Body.String())
+			}
+			assertSharedPageAssets(t, w.Body.String())
+
+			var count int
+			if err := db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count); err != nil {
+				t.Fatal(err)
+			}
+			if count != 1 {
+				t.Fatalf("user count = %d, want 1", count)
+			}
+		})
 	}
 }
 
