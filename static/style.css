@@ -245,6 +245,11 @@ input:focus-visible {
 	overflow-wrap: anywhere;
 }
 
+.comment-content,
+.post-content {
+	white-space: pre-wrap;
+}
+
 .post-author,
 .post-score,
 .post-categories,
