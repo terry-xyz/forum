@@ -1,0 +1,34 @@
+package main
+
+import (
+	"fmt"
+	"forum/database"
+	"os"
+	"strings"
+)
+
+const defaultDatabasePath = "forum.db"
+
+// main opens the forum database and fills it with deterministic demo data.
+func main() {
+	databasePath := strings.TrimSpace(os.Getenv("DATABASE_PATH"))
+	if databasePath == "" {
+		databasePath = defaultDatabasePath
+	}
+
+	// InitDB applies the schema first so the seed can run on a fresh checkout.
+	db, err := database.InitDB(databasePath)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	// SeedFakeData is idempotent, so running this command repeatedly refreshes missing data only.
+	if err := database.SeedFakeData(db); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("seeded %s with fake forum data\n", databasePath)
+}

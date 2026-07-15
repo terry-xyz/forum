@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Forum</title>
+	<script src="/static/theme.js"></script>
+	<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+	<nav class="site-nav" aria-label="Primary">
+		<div class="category-nav" aria-label="Categories">
+			<a{{if eq .SelectedCategoryID 0}} class="is-active" aria-current="page"{{end}} href="/">All</a>
+			{{range .Categories}}<a{{if eq $.SelectedCategoryID .ID}} class="is-active" aria-current="page"{{end}} href="/?category_id={{.ID}}">{{.Name}}</a>{{end}}
+		</div>
+		<div class="account-nav">
+		{{if .CurrentUser}}
+			<a href="/create-post">Create post</a>
+			<a href="/my-posts">My posts</a>
+			<a href="/liked-posts">Liked posts</a>
+			<form class="inline-form" method="POST" action="/logout">
+				<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+				<button type="submit">Logout</button>
+			</form>
+		{{else}}
+			<a href="/login">Login</a>
+			<a href="/register">Register</a>
+		{{end}}
+			<button type="button" class="theme-toggle" data-theme-toggle aria-label="Switch color theme" aria-pressed="false">
+				<span data-theme-toggle-label>Theme</span>
+			</button>
+		</div>
+	</nav>
+	<main class="page-shell">
+		{{if .EmptyMessage}}
+			<p class="empty-message">{{.EmptyMessage}}</p>
+		{{else}}
+			{{range .Posts}}
+				{{template "post" .}}
+			{{end}}
+			{{if or .HasPrev .HasNext}}
+				<nav class="pagination" aria-label="Pagination">
+					{{if .HasPrev}}<a href="{{.PrevURL}}">Previous</a>{{end}}
+					{{if .HasNext}}<a href="{{.NextURL}}">Next</a>{{end}}
+				</nav>
+			{{end}}
+		{{end}}
+	</main>
+</body>
+</html>

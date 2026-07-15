@@ -1,0 +1,46 @@
+{{define "post"}}
+<article class="post">
+<div class="post-title">
+<h3>{{.Title}}</h3>
+</div>
+<div class="post-content"><p>{{.Content}}</p></div>
+<small class="post-author">Author: {{.AuthorName}}</small>
+<p class="post-categories">Categories: {{range .Categories}}<span class="category-pill">{{.Name}}</span> {{end}}</p>
+<p class="post-score">Likes: {{.Likes}} | Dislikes: {{.Dislikes}}</p>
+{{if .IsAuthenticated}}
+	<div class="post-actions">
+		<form method="POST" action="/post-reaction">
+			<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+			<input type="hidden" name="post_id" value="{{.ID}}">
+			<input type="hidden" name="reaction_type" value="like">
+			<button type="submit">Like</button>
+		</form>
+
+		<form method="POST" action="/post-reaction">
+			<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+			<input type="hidden" name="post_id" value="{{.ID}}">
+			<input type="hidden" name="reaction_type" value="dislike">
+			<button type="submit">Dislike</button>
+		</form>
+	</div>
+	<form class="comment-form" method="POST" action="/comment">
+		<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+		<input type="hidden" name="post_id" value="{{.ID}}">
+		{{if .CommentError}}<p class="form-alert" role="alert">{{.CommentError}}</p>{{end}}
+		<textarea type="text" name="content" data-comment-textarea data-comment-limit="{{.CommentLimit}}" data-comment-warning-threshold="{{.CommentWarning}}" aria-describedby="comment-counter-{{.ID}}"></textarea>
+		<p id="comment-counter-{{.ID}}" class="comment-counter" data-comment-counter aria-live="polite"></p>
+		<button type="submit">Comment</button>
+	</form>
+{{end}}
+{{if .CanDelete}}
+	<form class="delete-form" method="POST" action="/delete-post">
+		<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+		<input type="hidden" name="post_id" value="{{.ID}}">
+		<button type="submit">Delete post</button>
+	</form>
+{{end}}
+{{range .Comments}}
+	{{template "comment" .}}
+{{end}}
+</article>
+{{end}}

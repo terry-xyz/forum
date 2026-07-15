@@ -1,0 +1,33 @@
+{{define "comment"}}
+<section class="comment">
+	<div class="comment-author">
+	<h5>{{.AuthorName}}</h5>
+	</div>
+	<div class="comment-content"><p>{{.Content}}</p></div>
+	<p class="comment-score">Likes: {{.Likes}} | Dislikes: {{.Dislikes}}</p>
+	{{if .IsAuthenticated}}
+		<div class="comment-actions">
+			<form method="POST" action="/comment-reaction">
+				<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+				<input type="hidden" name="comment_id" value="{{.ID}}">
+				<input type="hidden" name="reaction_type" value="like">
+				<button type="submit">Like</button>
+			</form>
+
+			<form method="POST" action="/comment-reaction">
+				<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+				<input type="hidden" name="comment_id" value="{{.ID}}">
+				<input type="hidden" name="reaction_type" value="dislike">
+				<button type="submit">Dislike</button>
+			</form>
+		</div>
+	{{end}}
+	{{if .CanDelete}}
+		<form class="delete-form" method="POST" action="/delete-comment">
+			<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+			<input type="hidden" name="comment_id" value="{{.ID}}">
+			<button type="submit">Delete comment</button>
+		</form>
+	{{end}}
+</section>
+{{end}}
