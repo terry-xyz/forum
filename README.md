@@ -118,8 +118,8 @@ docker run -d --name forum --restart unless-stopped \
   ghcr.io/terry-xyz/forum:latest
 ```
 
-Version tags are published with the same tag, for example
-`ghcr.io/terry-xyz/forum:0.4.0`.
+New version tags are published with the same tag; replace `latest` with a
+version such as `0.5.0` when one is pushed.
 
 ## Testing
 
