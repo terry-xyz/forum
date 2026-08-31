@@ -119,8 +119,7 @@ docker run -d --name forum --restart unless-stopped \
 ```
 
 Version tags are published with the same tag, for example
-`ghcr.io/terry-xyz/forum:0.4.0`. The image package may need to be made public
-in the repository's GitHub Packages settings before unauthenticated pulls.
+`ghcr.io/terry-xyz/forum:0.4.0`.
 
 ## Testing
 
