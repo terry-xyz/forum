@@ -3,7 +3,7 @@
 [![CI](https://github.com/terry-xyz/forum/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/terry-xyz/forum/actions/workflows/ci.yml)
 [![Container](https://github.com/terry-xyz/forum/actions/workflows/container.yml/badge.svg?branch=main)](https://github.com/terry-xyz/forum/actions/workflows/container.yml)
 [![Go version](https://img.shields.io/github/go-mod/go-version/terry-xyz/forum)](https://github.com/terry-xyz/forum/blob/main/go.mod)
-[![Go Report Card](https://goreportcard.com/badge/github.com/terry-xyz/forum)](https://goreportcard.com/report/github.com/terry-xyz/forum)
+[![Latest release](https://img.shields.io/github/v/release/terry-xyz/forum?display_name=tag&sort=semver)](https://github.com/terry-xyz/forum/releases/latest)
 [![License](https://img.shields.io/github/license/terry-xyz/forum)](https://github.com/terry-xyz/forum/blob/main/LICENSE)
 
 A small server-rendered forum application written in Go. It uses `net/http`,
@@ -118,8 +118,10 @@ docker run -d --name forum --restart unless-stopped \
   ghcr.io/terry-xyz/forum:latest
 ```
 
-New version tags are published with the same tag; replace `latest` with a
-version such as `0.5.0` when one is pushed.
+New `v*` version tags are published with the same tag, semver aliases, and the
+`latest` tag. For example, the `v1.0.0` release is available as
+`ghcr.io/terry-xyz/forum:v1.0.0`, `ghcr.io/terry-xyz/forum:1.0.0`, and
+`ghcr.io/terry-xyz/forum:latest`.
 
 ## Testing
 
