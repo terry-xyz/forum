@@ -1,5 +1,11 @@
 # Forum
 
+[![CI](https://github.com/terry-xyz/forum/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/terry-xyz/forum/actions/workflows/ci.yml)
+[![Container](https://github.com/terry-xyz/forum/actions/workflows/container.yml/badge.svg?branch=main)](https://github.com/terry-xyz/forum/actions/workflows/container.yml)
+[![Go version](https://img.shields.io/github/go-mod/go-version/terry-xyz/forum)](https://github.com/terry-xyz/forum/blob/main/go.mod)
+[![Go Report Card](https://goreportcard.com/badge/github.com/terry-xyz/forum)](https://goreportcard.com/report/github.com/terry-xyz/forum)
+[![License](https://img.shields.io/github/license/terry-xyz/forum)](https://github.com/terry-xyz/forum/blob/main/LICENSE)
+
 A small server-rendered forum application written in Go. It uses `net/http`,
 SQLite, bcrypt password hashing, and HTML templates to provide basic forum
 workflows without a separate frontend build step.
@@ -94,6 +100,27 @@ docker run --rm -p 8080:8080 -e DATABASE_PATH=/app/data/forum.db -v "$(pwd)/data
 
 If your host enforces Unix file ownership on bind mounts, make sure the mounted
 data directory is writable by UID `10001`.
+
+## Deployment
+
+GitHub Actions publishes the Docker image to GitHub Container Registry for
+pushes to `main` and for version tags. Pull the latest image and persist the
+SQLite database with a mounted data directory:
+
+```sh
+docker pull ghcr.io/terry-xyz/forum:latest
+mkdir -p data
+docker run -d --name forum --restart unless-stopped \
+  -p 8080:8080 \
+  -e PORT=8080 \
+  -e DATABASE_PATH=/app/data/forum.db \
+  -v "$(pwd)/data:/app/data" \
+  ghcr.io/terry-xyz/forum:latest
+```
+
+Version tags are published with the same tag, for example
+`ghcr.io/terry-xyz/forum:0.4.0`. The image package may need to be made public
+in the repository's GitHub Packages settings before unauthenticated pulls.
 
 ## Testing
 
